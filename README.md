@@ -21,4 +21,7 @@ cd MaskRegistration
  python MaskRegistration.py -h
  python MaskRegistrationGUI.py
  ```
-
+## Create .exe
+ ```bash
+ pyinstaller MaskRegistrationGUI.py --noconsole
+ ```
