@@ -19,7 +19,7 @@ def transform(input_dicom_folder_1: Path,
     reverse = False if reverse is None else reverse
 
     while True:
-        dicom_names = split_dcm(reader.GetGDCMSeriesFileNames(input_dicom_folder_2))[0]
+        dicom_names = split_dcm(reader.GetGDCMSeriesFileNames(input_dicom_folder_2.as_posix()))[0]
         if reverse:
             dicom_names = dicom_names[::-1]
 
@@ -28,9 +28,9 @@ def transform(input_dicom_folder_1: Path,
 
         temp_dir_mask_as_dcm = tempfile.TemporaryDirectory()
 
-        mask_to_dicom(input_dicom_folder_1, input_mask_file, temp_dir_mask_as_dcm.name)
+        mask_to_dicom(input_dicom_folder_1, input_mask_file, Path(temp_dir_mask_as_dcm.name))
         # read mask_file
-        reader.SetFileNames(reader.GetGDCMSeriesFileNames(temp_dir_mask_as_dcm))
+        reader.SetFileNames(reader.GetGDCMSeriesFileNames(temp_dir_mask_as_dcm.name))
         mask = reader.Execute()
         # cast to float for registration
         mask = sitk.Cast(mask, sitk.sitkFloat32)
@@ -50,7 +50,7 @@ def transform(input_dicom_folder_1: Path,
 
         registeredImg = resampleFilter.Execute(mask)
         registeredImg = sitk.Cast(registeredImg, sitk.sitkUInt8)
-        writer.SetFileName(out_nii_file)
+        writer.SetFileName(out_nii_file.as_posix())
 
         writer.Execute(registeredImg)
         img_nifti = nib.load(out_nii_file)
