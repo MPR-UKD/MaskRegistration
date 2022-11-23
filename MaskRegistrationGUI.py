@@ -5,7 +5,7 @@ from pathlib import Path
 from PyQt5.QtWidgets import *
 import sys
 from backend import transform
-
+from pydicom.encoders import gdcm, pylibjpeg
 
 class MaskRegistration(QMainWindow):
     def __init__(self):
