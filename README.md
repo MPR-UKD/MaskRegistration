@@ -14,7 +14,16 @@ MaskRegistration is a wrapper-tool for [SimpleITK](https://github.com/SimpleITK/
 9. Save the image data from Nibabel to the output NIFTI file.
 10. Clean up the temporary directory.
 
+## Easy use
+
+MaskRegistration can be easily used by downloading its included exe files:
+
+- [CLI](/dist/MaskRegistration.exe)
+- [GUI](/dist/MaskRegistrationGUI.exe)
+
 ## Environment Setup
+
+Alternatively, you can use the Soruce code, which has the advantage that you can make changes.
 
 1. Install [python3.10](https://www.python.org/downloads/release/python-3100/)
 2. Clone MaskRegistration Repository
