@@ -118,7 +118,6 @@ class MaskRegistration(QMainWindow):
             msg = QMessageBox()
             msg.setWindowTitle("User massage")
             msg.setText("Calculations successfully completed")
-            msg.setIcon(QMessageBox.Ok)
             msg.exec_()
 
             dicom_1_text.setText("")
