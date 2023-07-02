@@ -5,7 +5,6 @@ import argparse
 from backend import transform
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser(description="Mask Registration")
     parser.add_argument(
         "-d1", "--input_dcm1", type=str, help="path to the first DICOM folder"

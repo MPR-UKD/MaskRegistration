@@ -93,7 +93,9 @@ class MaskRegistration(QMainWindow):
         """Update the dicom_1_text field with the selected directory."""
         self.file_dialog("Select Dicom Path 1", self.dicom_1_text, "DIR")
         if self.dicom_1_text.text() != "" and self.mask_1_text.text() == "":
-            self.mask_1_text.setText(os.path.join(self.dicom_1_text.text(), "mask.nii.gz"))
+            self.mask_1_text.setText(
+                os.path.join(self.dicom_1_text.text(), "mask.nii.gz")
+            )
 
     def update_mask_1(self) -> None:
         """Update the mask_1_text field with the selected file."""
@@ -103,7 +105,9 @@ class MaskRegistration(QMainWindow):
         """Update the dicom_2_text field with the selected directory."""
         self.file_dialog("Select Dicom Path 2", self.dicom_2_text, "DIR")
         if self.dicom_2_text.text() != "" and self.mask_2_text.text() == "":
-            self.mask_2_text.setText(os.path.join(self.dicom_2_text.text(), "mask.nii.gz"))
+            self.mask_2_text.setText(
+                os.path.join(self.dicom_2_text.text(), "mask.nii.gz")
+            )
 
     def update_mask_2(self) -> None:
         """Update the mask_2_text field with the selected file."""
@@ -115,7 +119,12 @@ class MaskRegistration(QMainWindow):
         self.label.show()
         self.movie.start()
         try:
-            if not self.dicom_1_text.text() or not self.mask_1_text.text() or not self.dicom_2_text.text() or not self.mask_2_text.text():
+            if (
+                not self.dicom_1_text.text()
+                or not self.mask_1_text.text()
+                or not self.dicom_2_text.text()
+                or not self.mask_2_text.text()
+            ):
                 raise ValueError("Please fill in all the required fields.")
             transform(
                 input_dicom_folder_1=Path(self.dicom_1_text.text()),
@@ -155,8 +164,8 @@ class MaskRegistration(QMainWindow):
 
         :param path: Path to save
         """
-        key = wr.CreateKey(wr.HKEY_CURRENT_USER, r'Software\MaskRegistration')
-        wr.SetValueEx(key, 'LastDICOMPath', 0, wr.REG_SZ, path)
+        key = wr.CreateKey(wr.HKEY_CURRENT_USER, r"Software\MaskRegistration")
+        wr.SetValueEx(key, "LastDICOMPath", 0, wr.REG_SZ, path)
         wr.CloseKey(key)
 
     def get_last_dicom_path(self) -> str:
@@ -166,8 +175,8 @@ class MaskRegistration(QMainWindow):
         :return: Last DICOM path
         """
         try:
-            key = wr.OpenKey(wr.HKEY_CURRENT_USER, r'Software\MaskRegistration')
-            path, _ = wr.QueryValueEx(key, 'LastDICOMPath')
+            key = wr.OpenKey(wr.HKEY_CURRENT_USER, r"Software\MaskRegistration")
+            path, _ = wr.QueryValueEx(key, "LastDICOMPath")
             wr.CloseKey(key)
             return path
         except Exception:
