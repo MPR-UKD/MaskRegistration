@@ -2,9 +2,9 @@ import sys
 from pathlib import Path
 
 from pydicom.encoders import gdcm, pylibjpeg  # Important import for pyinstaller !
-from PyQt5 import QtCore, QtGui
-from PyQt5.QtCore import QSize
-from PyQt5.QtWidgets import *
+from PyQt6 import QtCore, QtGui
+from PyQt6.QtCore import QSize
+from PyQt6.QtWidgets import *
 
 from backend import transform
 
@@ -149,7 +149,7 @@ class MaskRegistration(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setStyle("QtCurve")
+    app.setStyle("Fusion")
     window = MaskRegistration()
     window.show()
     app.exec()
