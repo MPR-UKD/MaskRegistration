@@ -2,7 +2,7 @@ import tempfile
 
 import SimpleITK as sitk
 
-from utils import *
+from src.MaskRegistration.utils import *
 
 
 def transform(
@@ -76,7 +76,7 @@ def transform(
 
         writer.Execute(registeredImg)
         img_nifti = nib.load(out_nii_file)
-        img = img_nifti.get_data()
+        img = img_nifti.get_fdata()
         if reverse:
             break
         if img.max() == 0:
