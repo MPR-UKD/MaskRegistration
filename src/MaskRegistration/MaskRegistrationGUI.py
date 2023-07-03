@@ -132,6 +132,8 @@ class MaskRegistration(QMainWindow):
                 self, text, last_path, "NIFTI files (*.nii*)"
             )[0]
         line_edit.setText(dialog)
+        if dialog != "":
+            self.save_last_dicom_path(Path(dialog).parent.as_posix())
 
     def update_dicom_1(self) -> None:
         """Update the dicom_1_text field with the selected directory."""
