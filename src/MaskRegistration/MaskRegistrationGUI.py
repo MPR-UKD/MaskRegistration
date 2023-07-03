@@ -89,7 +89,18 @@ class MaskRegistration(QMainWindow):
         self.popup_layout = QVBoxLayout()
 
         # Adding gif animation
-        self.movie = QtGui.QMovie("./loading.gif")
+        if getattr(sys, 'frozen', False):
+            # If it's compiled, adjust the path
+            base_path = sys._MEIPASS
+        else:
+            # Otherwise, the path remains the same
+            base_path = os.path.dirname(os.path.abspath(__file__))
+
+            # Now, use this base_path to reference your gif
+        gif_path = os.path.join(base_path, 'loading.gif')
+
+
+        self.movie = QtGui.QMovie(gif_path)
         self.movie.setScaledSize(QtCore.QSize(280, 280))
         self.label = QLabel(self.popup_widget)
         self.label.setMovie(self.movie)
