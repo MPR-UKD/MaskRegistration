@@ -21,6 +21,10 @@ MaskRegistration can be easily used by downloading its included exe files:
 - [CLI](/dist/MaskRegistration.exe)
 - [GUI](/dist/MaskRegistrationGUI.exe)
 
+or as whl file to include the transformation step in your own project:
+
+- [WHL](/dist/maskregistration-0.1.0-py3-none-any.whl)
+
 ## Environment Setup
 
 Alternatively, you can use the Soruce code, which has the advantage that you can make changes.
@@ -36,7 +40,8 @@ cd MaskRegistration
  ```
 4. Install requirements.
  ```bash
- pip install -r requirements.txt
+ pip install poetry==1.4.2
+ poetry install
  ```
 5. Run Command Line Interface (CLI) or Graphical User Interface (GUI)
 
@@ -46,7 +51,7 @@ The command-line tool that performs a registration process to align a mask image
 
 ### Usage
  ```bash
-python MaskRegistration.py -d1 <input_dcm1> -m <input_mask> -d2 <input_dcm2> -o <output_mask>
+poetry run python src/MaskRegistration/MaskRegistration.py -d1 <input_dcm1> -m <input_mask> -d2 <input_dcm2> -o <output_mask>
  ```
 
 Where:
@@ -61,7 +66,7 @@ Where:
 To align the mask image mask.nii.gz with the images in the DICOM folder dicom_folder_2, using the images in the DICOM folder dicom_folder_1 as reference, and save the resulting image in the file output_mask.nii.gz, run the following command:
 
  ```bash
-python MaskRegistration.py -d1 dicom_folder_1 -m mask.nii.gz -d2 dicom_folder_2 -o output_mask.nii.gz
+poetry run python src/MaskRegistration/MaskRegistration.py MaskRegistration.py -d1 dicom_folder_1 -m mask.nii.gz -d2 dicom_folder_2 -o output_mask.nii.gz
  ```
 
 ## Graphical User Interface (GUI)
@@ -78,7 +83,7 @@ The __init__ method sets up the main window and its layout, and initializes the 
 
 ### Usage
  ```bash
-python MaskRegistrationGUI.py
+poetry run python src/MaskRegistration/MaskRegistrationGUI.py
 ```
 
 ## License
