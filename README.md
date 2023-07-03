@@ -71,7 +71,7 @@ poetry run python src/MaskRegistration/MaskRegistration.py MaskRegistration.py -
 
 ## Graphical User Interface (GUI)
 
-![](/images/GUI.png)
+![](/assets/show.gif)
 
 The MaskRegistration GUI is a PyQt5-based graphical user interface (GUI) that allows the user to input two DICOM image folders, a mask file, and an output file path, and performs a registration process to align the mask file with the images in the second DICOM folder. The resulting image is then saved in the specified output file.
 

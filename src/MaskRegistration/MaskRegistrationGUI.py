@@ -84,8 +84,8 @@ class MaskRegistration(QMainWindow):
 
         # Create a QWidget for the popup
         self.popup_widget = QWidget()
-        self.popup_widget.setWindowTitle("Loading")
-        self.popup_widget.setFixedSize(300, 300)
+        self.popup_widget.setWindowTitle("Registration and Transformation")
+        self.popup_widget.setFixedSize(580, 320)
         self.popup_layout = QVBoxLayout()
 
         # Adding gif animation
@@ -101,7 +101,7 @@ class MaskRegistration(QMainWindow):
 
 
         self.movie = QtGui.QMovie(gif_path)
-        self.movie.setScaledSize(QtCore.QSize(280, 280))
+        self.movie.setScaledSize(QtCore.QSize(548, 309))
         self.label = QLabel(self.popup_widget)
         self.label.setMovie(self.movie)
         self.popup_layout.addWidget(self.label)
