@@ -2,7 +2,7 @@
 
 import argparse
 
-from backend import transform
+from src.MaskRegistration.backend import transform
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Mask Registration")

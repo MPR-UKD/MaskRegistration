@@ -3,10 +3,9 @@ import os
 import winreg as wr
 from pathlib import Path
 
-from pydicom.encoders import gdcm, pylibjpeg  # Important import for pyinstaller!
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtWidgets import *
-from backend import transform
+from src.MaskRegistration.backend import transform
 
 
 class MaskRegistration(QMainWindow):
@@ -59,7 +58,7 @@ class MaskRegistration(QMainWindow):
         self.run.clicked.connect(self.run_registration)
 
         # Adding gif animation
-        self.movie = QtGui.QMovie("loading.gif")
+        self.movie = QtGui.QMovie("../../loading.gif")
         self.label = QtWidgets.QLabel(self)
         self.label.setMovie(self.movie)
 
