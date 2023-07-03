@@ -27,6 +27,7 @@ pywin32-ctypes = "^0.2.2"
 setuptools = "^68.0.0"
 simpleitk = "^2.2.1"
 wheel = "^0.40.0"
+black = "^23.3.0"
 
 
 [build-system]
