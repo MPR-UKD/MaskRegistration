@@ -139,9 +139,10 @@ class MaskRegistration(QMainWindow):
         """Update the dicom_1_text field with the selected directory."""
         self.file_dialog("Select Dicom Path 1", self.dicom_1_text, "DIR")
         if self.dicom_1_text.text() != "" and self.mask_1_text.text() == "":
-            self.mask_1_text.setText(
-                os.path.join(self.dicom_1_text.text(), "mask.nii.gz")
-            )
+            if (Path(self.dicom_1_text.text()) / "mask.nii.gz").exists():
+                self.mask_1_text.setText(
+                    os.path.join(self.dicom_1_text.text(), "mask.nii.gz")
+                )
 
     def update_mask_1(self) -> None:
         """Update the mask_1_text field with the selected file."""
