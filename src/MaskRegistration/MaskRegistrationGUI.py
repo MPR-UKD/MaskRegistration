@@ -5,7 +5,32 @@ from pathlib import Path
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtWidgets import *
+from PyQt6.QtCore import QThread, pyqtSignal
 from src.MaskRegistration.backend import transform
+
+
+class RegistrationThread(QThread):
+    finished_signal = pyqtSignal(str, bool)
+
+    def __init__(self, dicom_1, mask_1, dicom_2, mask_2):
+        super().__init__()
+        self.dicom_1 = dicom_1
+        self.mask_1 = mask_1
+        self.dicom_2 = dicom_2
+        self.mask_2 = mask_2
+
+    def run(self):
+        try:
+            transform(
+                input_dicom_folder_1=Path(self.dicom_1),
+                input_mask_file=Path(self.mask_1),
+                input_dicom_folder_2=Path(self.dicom_2),
+                out_nii_file=Path(self.mask_2),
+            )
+        except Exception as error:
+            self.finished_signal.emit(str(error), False)
+        else:
+            self.finished_signal.emit("Calculations successfully completed.", True)
 
 
 class MaskRegistration(QMainWindow):
@@ -57,10 +82,19 @@ class MaskRegistration(QMainWindow):
         layout.addWidget(self.run, 0, 2, 4, 1)
         self.run.clicked.connect(self.run_registration)
 
+        # Create a QWidget for the popup
+        self.popup_widget = QWidget()
+        self.popup_widget.setWindowTitle("Loading")
+        self.popup_widget.setFixedSize(300, 300)
+        self.popup_layout = QVBoxLayout()
+
         # Adding gif animation
-        self.movie = QtGui.QMovie("../../loading.gif")
-        self.label = QtWidgets.QLabel(self)
+        self.movie = QtGui.QMovie("./loading.gif")
+        self.movie.setScaledSize(QtCore.QSize(280, 280))
+        self.label = QLabel(self.popup_widget)
         self.label.setMovie(self.movie)
+        self.popup_layout.addWidget(self.label)
+        self.popup_widget.setLayout(self.popup_layout)
 
         widget = QWidget()
         widget.setLayout(layout)
@@ -112,11 +146,12 @@ class MaskRegistration(QMainWindow):
         """Update the mask_2_text field with the selected file."""
         self.file_dialog("Select Save File Mask", self.mask_2_text, "SAVE_FILE")
 
-    def run_registration(self) -> None:
-        """Run the registration process."""
-        # Start the loading animation
-        self.label.show()
+    def run_registration(self):
+        self.run.setEnabled(False)  # Deactivate RUN button
+        self.popup_widget.show()
         self.movie.start()
+
+        # Start registration in a separate thread
         try:
             if (
                 not self.dicom_1_text.text()
@@ -125,37 +160,47 @@ class MaskRegistration(QMainWindow):
                 or not self.mask_2_text.text()
             ):
                 raise ValueError("Please fill in all the required fields.")
-            transform(
-                input_dicom_folder_1=Path(self.dicom_1_text.text()),
-                input_mask_file=Path(self.mask_1_text.text()),
-                input_dicom_folder_2=Path(self.dicom_2_text.text()),
-                out_nii_file=Path(self.mask_2_text.text()),
+            self.registration_thread = RegistrationThread(
+                self.dicom_1_text.text(),
+                self.mask_1_text.text(),
+                self.dicom_2_text.text(),
+                self.mask_2_text.text(),
             )
+            self.registration_thread.finished_signal.connect(self.registration_finished)
+            self.registration_thread.start()
         except Exception as error:
+            self.run.setEnabled(True)  # Deactivate RUN button
+            self.popup_widget.close()
+            self.movie.stop()
             msg = QMessageBox()
             msg.setWindowTitle("Error")
             msg.setText(f"Calculation failed: {str(error)}")
             msg.setIcon(QMessageBox.Icon.Warning)
             msg.setStyleSheet("color: red;")
             msg.exec()
-        else:
-            msg = QMessageBox()
-            msg.setWindowTitle("Success")
-            msg.setText("Calculations successfully completed.")
-            msg.exec()
 
-            # Clear text fields
+    def registration_finished(self, message, success):
+        # Reactivate RUN button
+        self.run.setEnabled(True)
+        # Stop the loading animation
+        self.popup_widget.close()
+        self.movie.stop()
+        # Show message box
+        msg = QMessageBox()
+        msg.setWindowTitle("Success" if success else "Error")
+        if success:
+            msg.setText("Calculations successfully completed.")
+        msg.setText(message)
+        msg.setIcon(
+            QMessageBox.Icon.Information if success else QMessageBox.Icon.Warning
+        )
+        msg.exec()
+        # Clear text fields if successful
+        if success:
             self.dicom_1_text.setText("")
             self.mask_1_text.setText("")
             self.dicom_2_text.setText("")
             self.mask_2_text.setText("")
-        finally:
-            # Stop the loading animation
-            self.movie.stop()
-            self.label.hide()
-            # Save the last selected DICOM path
-            if self.dicom_1_text.text():
-                self.save_last_dicom_path(os.path.dirname(self.dicom_1_text.text()))
 
     def save_last_dicom_path(self, path: str) -> None:
         """

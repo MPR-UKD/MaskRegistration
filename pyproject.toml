@@ -36,3 +36,6 @@ pytest-html = "^3.2.0"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[extras]
+pipfile_deprecated_finder = ['pip-shims<=0.3.4']

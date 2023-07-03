@@ -3,6 +3,7 @@ import tempfile
 from pathlib import Path
 from src.MaskRegistration import transform
 
+
 # Define fixtures or test data at module level
 @pytest.fixture
 def test_data():
@@ -24,7 +25,7 @@ def test_transform_dess_to_t2(test_data, temp_path):
         input_dicom_folder_1=dess_folder,
         input_mask_file=dess_folder / "mask.nii.gz",
         input_dicom_folder_2=t2_folder,
-        out_nii_file=output_file
+        out_nii_file=output_file,
     )
 
     # Write assertions here to check if the function worked as expected.
@@ -41,7 +42,7 @@ def test_transform_dess_to_dGEMRIC(test_data, temp_path):
         input_dicom_folder_1=dess_folder,
         input_mask_file=dess_folder / "mask.nii.gz",
         input_dicom_folder_2=dGEMRIC_folder,
-        out_nii_file=output_file
+        out_nii_file=output_file,
     )
 
     # Write assertions here.
@@ -57,11 +58,12 @@ def test_transform_dess_to_t1rho(test_data, temp_path):
         input_dicom_folder_1=dess_folder,
         input_mask_file=dess_folder / "mask.nii.gz",
         input_dicom_folder_2=t1rho_folder,
-        out_nii_file=output_file
+        out_nii_file=output_file,
     )
 
     # Write assertions here.
     assert output_file.exists(), "Output file was not created"
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     pytest.main()
