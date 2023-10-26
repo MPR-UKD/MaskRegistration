@@ -1,6 +1,11 @@
+import multiprocessing
 import sys
 import os
-import winreg as wr
+import platform
+if platform.platform() == "win32":
+    import winreg as wr
+else:
+    wr = None
 from pathlib import Path
 
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -222,9 +227,10 @@ class MaskRegistration(QMainWindow):
 
         :param path: Path to save
         """
-        key = wr.CreateKey(wr.HKEY_CURRENT_USER, r"Software\MaskRegistration")
-        wr.SetValueEx(key, "LastDICOMPath", 0, wr.REG_SZ, path)
-        wr.CloseKey(key)
+        if wr:
+            key = wr.CreateKey(wr.HKEY_CURRENT_USER, r"Software\MaskRegistration")
+            wr.SetValueEx(key, "LastDICOMPath", 0, wr.REG_SZ, path)
+            wr.CloseKey(key)
 
     def get_last_dicom_path(self) -> str:
         """
@@ -242,6 +248,7 @@ class MaskRegistration(QMainWindow):
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     window = MaskRegistration()
