@@ -49,6 +49,8 @@ def mask_to_dicom(dcm_folder: Path, nii_file: Path, out_folder: Path):
     dicom_files = natsort.natsorted([_ for _ in dcm_folder.glob("*.dcm")])
     mask = mask.astype("uint16")
     for i, dcm_file in enumerate(dicom_files):
+        if i == mask.shape[2]:
+            return None
         ds = pydicom.dcmread(dcm_file)
         ds.PixelData = mask[:, :, i].tobytes()
         ds.save_as(out_folder / os.path.basename(dcm_file))
