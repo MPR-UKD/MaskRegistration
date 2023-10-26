@@ -105,3 +105,10 @@ pre-commit install
 # Support
 
 If you really like this repository and find it useful, please consider (★) starring it, so that it can reach a broader audience of like-minded people.
+
+## List of commands
+
+1. Update requirements file
+```shell
+poetry export --format requirements.txt --output requirements.txt --without-hashes
+```
