@@ -25,6 +25,12 @@ class RegistrationThread(QThread):
         self.mask_2 = mask_2
 
     def run(self):
+        transform(
+            input_dicom_folder_1=Path(self.dicom_1),
+            input_mask_file=Path(self.mask_1),
+            input_dicom_folder_2=Path(self.dicom_2),
+            out_nii_file=Path(self.mask_2),
+        )
         try:
             transform(
                 input_dicom_folder_1=Path(self.dicom_1),
