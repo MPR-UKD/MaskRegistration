@@ -2,9 +2,10 @@
 
 import argparse
 
-from src.MaskRegistration.backend import transform
+from MaskRegistration.backend import transform
 
-if __name__ == "__main__":
+
+def main():
     parser = argparse.ArgumentParser(description="Mask Registration")
     parser.add_argument(
         "-d1", "--input_dcm1", type=str, help="path to the first DICOM folder"
@@ -24,3 +25,7 @@ if __name__ == "__main__":
         input_dicom_folder_2=args.input_dcm2,
         out_nii_file=args.output_mask,
     )
+
+
+if __name__ == "__main__":
+    main()

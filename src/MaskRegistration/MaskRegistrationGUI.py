@@ -11,7 +11,7 @@ from pathlib import Path
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import QThread, pyqtSignal
-from src.MaskRegistration.backend import transform
+from MaskRegistration.backend import transform
 
 
 class RegistrationThread(QThread):
@@ -25,12 +25,6 @@ class RegistrationThread(QThread):
         self.mask_2 = mask_2
 
     def run(self):
-        transform(
-            input_dicom_folder_1=Path(self.dicom_1),
-            input_mask_file=Path(self.mask_1),
-            input_dicom_folder_2=Path(self.dicom_2),
-            out_nii_file=Path(self.mask_2),
-        )
         try:
             transform(
                 input_dicom_folder_1=Path(self.dicom_1),
@@ -253,10 +247,14 @@ class MaskRegistration(QMainWindow):
             return QtCore.QDir.currentPath()
 
 
-if __name__ == "__main__":
+def main():
     multiprocessing.freeze_support()
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     window = MaskRegistration()
     window.show()
     app.exec()
+
+
+if __name__ == "__main__":
+    main()

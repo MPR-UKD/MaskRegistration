@@ -1,41 +1,42 @@
-[tool.poetry]
+[project]
 name = "maskregistration"
 version = "0.1.0"
-description = ""
-authors = ["Ludger Radke <113907719+ludgerradke@users.noreply.github.com>"]
+description = "Medical image registration tool for aligning segmentation masks"
+authors = [
+    {name = "Ludger Radke", email = "113907719+ludgerradke@users.noreply.github.com"}
+]
 readme = "README.md"
-packages = [{include = "src"}]
+requires-python = ">=3.10,<3.13"
 
-[tool.poetry.dependencies]
-python = ">=3.10,<3.13"
-altgraph = "^0.17.3"
-future = "^0.18.3"
-natsort = "^8.4.0"
-nibabel = "^5.1.0"
-numpy = "^1.25.0"
-packaging = "^23.1"
-pefile = "^2023.2.7"
-pip = "^23.1.2"
-pydicom = "^2.4.1"
-pyinstaller-hooks-contrib = "^2023.4"
-pyinstaller = "^5.13.0"
-pyparsing = "^3.1.0"
-pyqt6-qt6 = "^6.5.1"
-pyqt6-sip = "^13.5.1"
-pyqt6 = "^6.5.1"
-pywin32-ctypes = "^0.2.2"
-setuptools = "^68.0.0"
-simpleitk = "^2.2.1"
-wheel = "^0.40.0"
-black = "^23.3.0"
-pytest = "^7.4.0"
-pytest-cov = "^4.1.0"
-pytest-html = "^3.2.0"
+dependencies = [
+    "natsort>=8.4.0",
+    "nibabel>=5.1.0",
+    "numpy>=1.25.0",
+    "pydicom>=2.4.1",
+    "pyqt6>=6.5.1",
+    "simpleitk>=2.2.1",
+]
 
+[project.optional-dependencies]
+dev = [
+    "black>=23.3.0",
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-html>=3.2.0",
+    "pyinstaller>=5.13.0",
+]
+
+[project.scripts]
+maskregistration = "MaskRegistration.MaskRegistration:main"
+maskregistration-gui = "MaskRegistration.MaskRegistrationGUI:main"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[extras]
-pipfile_deprecated_finder = ['pip-shims<=0.3.4']
+[tool.hatch.build.targets.wheel]
+packages = ["src/MaskRegistration"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["test"]

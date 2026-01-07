@@ -27,9 +27,9 @@ or as whl file to include the transformation step in your own project:
 
 ## Environment Setup
 
-Alternatively, you can use the Soruce code, which has the advantage that you can make changes.
+Alternatively, you can use the source code, which has the advantage that you can make changes.
 
-1. Install [python3.10](https://www.python.org/downloads/release/python-3100/)
+1. Install [python3.10](https://www.python.org/downloads/release/python-3100/) and [uv](https://docs.astral.sh/uv/)
 2. Clone MaskRegistration Repository
  ```bash
 git clone https://github.com/ludgerradke/MaskRegistration
@@ -38,10 +38,9 @@ git clone https://github.com/ludgerradke/MaskRegistration
  ```bash
 cd MaskRegistration
  ```
-4. Install requirements.
+4. Install dependencies
  ```bash
- pip install poetry==1.4.2
- poetry install
+uv sync
  ```
 5. Run Command Line Interface (CLI) or Graphical User Interface (GUI)
 
@@ -51,7 +50,7 @@ The command-line tool that performs a registration process to align a mask image
 
 ### Usage
  ```bash
-poetry run python src/MaskRegistration/MaskRegistration.py -d1 <input_dcm1> -m <input_mask> -d2 <input_dcm2> -o <output_mask>
+uv run maskregistration -d1 <input_dcm1> -m <input_mask> -d2 <input_dcm2> -o <output_mask>
  ```
 
 Where:
@@ -66,24 +65,51 @@ Where:
 To align the mask image mask.nii.gz with the images in the DICOM folder dicom_folder_2, using the images in the DICOM folder dicom_folder_1 as reference, and save the resulting image in the file output_mask.nii.gz, run the following command:
 
  ```bash
-poetry run python src/MaskRegistration/MaskRegistration.py MaskRegistration.py -d1 dicom_folder_1 -m mask.nii.gz -d2 dicom_folder_2 -o output_mask.nii.gz
+uv run maskregistration -d1 dicom_folder_1 -m mask.nii.gz -d2 dicom_folder_2 -o output_mask.nii.gz
  ```
 
 ## Graphical User Interface (GUI)
 
 ![](/assets/show.gif)
 
-The MaskRegistration GUI is a PyQt5-based graphical user interface (GUI) that allows the user to input two DICOM image folders, a mask file, and an output file path, and performs a registration process to align the mask file with the images in the second DICOM folder. The resulting image is then saved in the specified output file.
+The MaskRegistration GUI is a PyQt6-based graphical user interface (GUI) that allows the user to input two DICOM image folders, a mask file, and an output file path, and performs a registration process to align the mask file with the images in the second DICOM folder. The resulting image is then saved in the specified output file.
 
 The GUI consists of several widgets, including buttons, text fields, and a layout. The buttons allow the user to browse for and select the input DICOM folders, mask file, and output file. The text fields display the selected paths. The layout arranges the widgets in a grid.
 
 The GUI also has a "RUN" button that, when clicked, executes the transform function from the backend module with the specified input and output paths.
 
-The __init__ method sets up the main window and its layout, and initializes the widgets. The file_dialog method displays a file dialog and updates the specified text field with the selected file or directory path. The run method is executed when the "RUN" button is clicked, and calls the transform function with the specified input and output paths.
-
 ### Usage
  ```bash
-poetry run python src/MaskRegistration/MaskRegistrationGUI.py
+uv run maskregistration-gui
+```
+
+## Build
+
+To build standalone executables:
+
+```bash
+# macOS
+./build_mac.sh
+
+# Windows
+./build.sh
+```
+
+## Development
+
+Install with dev dependencies:
+```bash
+uv sync --extra dev
+```
+
+Run tests:
+```bash
+uv run pytest
+```
+
+Format code:
+```bash
+uv run black .
 ```
 
 ## License
@@ -91,24 +117,17 @@ poetry run python src/MaskRegistration/MaskRegistrationGUI.py
 
 The GNU General Public License is a free, copyleft license for software and other kinds of works.
 
-### Git hocks
+### Git hooks
 Install "pre-commit"
 ```bash
-pip install pre-commit
+uv run pip install pre-commit
 ```
 
 then run:
 ```bash
-pre-commit install
+uv run pre-commit install
 ```
 
 # Support
 
-If you really like this repository and find it useful, please consider (★) starring it, so that it can reach a broader audience of like-minded people.
-
-## List of commands
-
-1. Update requirements file
-```shell
-poetry export --format requirements.txt --output requirements.txt --without-hashes
-```
+If you really like this repository and find it useful, please consider starring it, so that it can reach a broader audience of like-minded people.

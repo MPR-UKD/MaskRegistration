@@ -2,7 +2,7 @@ import tempfile
 
 import SimpleITK as sitk
 
-from src.MaskRegistration.utils import *
+from MaskRegistration.utils import *
 
 
 def transform(
