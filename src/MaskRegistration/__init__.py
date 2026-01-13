@@ -1,1 +1,1 @@
-from src.MaskRegistration.MaskRegistration import transform
+from MaskRegistration.backend import transform
