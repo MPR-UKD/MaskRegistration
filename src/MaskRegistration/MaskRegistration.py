@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import argparse
+from pathlib import Path
 
 from MaskRegistration.backend import transform
 
@@ -20,10 +21,10 @@ def main():
 
     args = parser.parse_args()
     transform(
-        input_dicom_folder_1=args.input_dcm1,
-        input_mask_file=args.input_mask,
-        input_dicom_folder_2=args.input_dcm2,
-        out_nii_file=args.output_mask,
+        input_dicom_folder_1=Path(args.input_dcm1),
+        input_mask_file=Path(args.input_mask),
+        input_dicom_folder_2=Path(args.input_dcm2),
+        out_nii_file=Path(args.output_mask),
     )
 
 
