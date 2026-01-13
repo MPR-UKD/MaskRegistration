@@ -17,12 +17,14 @@ from MaskRegistration.backend import transform
 class RegistrationThread(QThread):
     finished_signal = pyqtSignal(str, bool)
 
-    def __init__(self, dicom_1, mask_1, dicom_2, mask_2):
+    def __init__(self, dicom_1, mask_1, dicom_2, mask_2, reverse, subpixel):
         super().__init__()
         self.dicom_1 = dicom_1
         self.mask_1 = mask_1
         self.dicom_2 = dicom_2
         self.mask_2 = mask_2
+        self.reverse = reverse
+        self.subpixel = subpixel
 
     def run(self):
         try:
@@ -31,6 +33,8 @@ class RegistrationThread(QThread):
                 input_mask_file=Path(self.mask_1),
                 input_dicom_folder_2=Path(self.dicom_2),
                 out_nii_file=Path(self.mask_2),
+                reverse=self.reverse,
+                subpixel_factor=self.subpixel,
             )
         except Exception as error:
             self.finished_signal.emit(str(error), False)
@@ -76,6 +80,31 @@ class MaskRegistration(QMainWindow):
         layout.addWidget(self.mask_2_text, 3, 1, 1, 1)
         mask_2_button.clicked.connect(self.update_mask_2)
 
+        # Options row
+        options_layout = QHBoxLayout()
+
+        # Reverse mode
+        reverse_label = QLabel("Slice Direction:")
+        options_layout.addWidget(reverse_label)
+        self.reverse_combo = QComboBox()
+        self.reverse_combo.addItems(["auto", "normal", "reverse"])
+        self.reverse_combo.setToolTip("auto: try both, pick better result")
+        options_layout.addWidget(self.reverse_combo)
+
+        options_layout.addSpacing(20)
+
+        # Subpixel factor
+        subpixel_label = QLabel("Subpixel Factor:")
+        options_layout.addWidget(subpixel_label)
+        self.subpixel_spin = QSpinBox()
+        self.subpixel_spin.setRange(1, 20)
+        self.subpixel_spin.setValue(1)
+        self.subpixel_spin.setToolTip("1 = disabled, higher values preserve small structures")
+        options_layout.addWidget(self.subpixel_spin)
+
+        options_layout.addStretch()
+        layout.addLayout(options_layout, 4, 0, 1, 2)
+
         # Run Button
         self.run = QPushButton("RUN")
         self.run.setMinimumHeight(80)
@@ -84,7 +113,7 @@ class MaskRegistration(QMainWindow):
         myFont.setBold(True)
         self.run.setFont(myFont)
         self.run.setStyleSheet("background-color : red")
-        layout.addWidget(self.run, 0, 2, 4, 1)
+        layout.addWidget(self.run, 0, 2, 5, 1)
         self.run.clicked.connect(self.run_registration)
 
         # Create a QWidget for the popup
@@ -179,11 +208,18 @@ class MaskRegistration(QMainWindow):
                 or not self.mask_2_text.text()
             ):
                 raise ValueError("Please fill in all the required fields.")
+            # Get reverse mode
+            reverse_text = self.reverse_combo.currentText()
+            reverse_map = {"auto": None, "normal": False, "reverse": True}
+            reverse = reverse_map[reverse_text]
+
             self.registration_thread = RegistrationThread(
                 self.dicom_1_text.text(),
                 self.mask_1_text.text(),
                 self.dicom_2_text.text(),
                 self.mask_2_text.text(),
+                reverse=reverse,
+                subpixel=self.subpixel_spin.value(),
             )
             self.registration_thread.finished_signal.connect(self.registration_finished)
             self.registration_thread.start()

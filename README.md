@@ -3,16 +3,12 @@ MaskRegistration is a wrapper-tool for [SimpleITK](https://github.com/SimpleITK/
 
 **Registration Steps:**
 
-1. Initialize a SimpleITK ImageSeriesReader and ImageFileWriter.
-2. Read the DICOM images from input_dicom_folder_2 using the ImageSeriesReader, and store the result in the target variable. If the reverse parameter is True, the images are read in reverse order.
-3. Create a temporary directory and use the mask_to_dicom function to convert the mask file to a DICOM image and save it in the temporary directory.
-4. Read the mask image from the temporary directory using the ImageSeriesReader and store it in the mask variable.
-5. Cast the mask and target images to sitkFloat32 to prepare them for registration.
-6. Use a ResampleImageFilter to align the mask image with the target image. The ResampleImageFilter is configured to use nearest neighbor interpolation and to set the output image size, origin, spacing, and direction to match the target image.
-7. Cast the registered image to sitkUInt8 and write it to the output NIFTI file using the ImageFileWriter.
-8. Load the output NIFTI file using Nibabel, and check if the maximum value is 0. If it is, set the reverse flag to True and repeat the process from step 2. If the maximum value is not 0, exit the loop.
-9. Save the image data from Nibabel to the output NIFTI file.
-10. Clean up the temporary directory.
+1. Convert the mask file to DICOM format in a temporary directory
+2. If auto-detect mode: try both slice directions (normal and reverse), compare results by number of preserved labels and pixels, pick the better one
+3. Optionally upsample target Z-axis by subpixel factor for finer registration
+4. Use ResampleImageFilter with nearest neighbor interpolation to align mask with target geometry
+5. If subpixel was used: downsample back using OR-logic (if any sub-voxel is positive, result is positive)
+6. Save result as NIFTI file
 
 ## Easy use
 
@@ -50,22 +46,35 @@ The command-line tool that performs a registration process to align a mask image
 
 ### Usage
  ```bash
-uv run maskregistration -d1 <input_dcm1> -m <input_mask> -d2 <input_dcm2> -o <output_mask>
+uv run maskregistration -d1 <input_dcm1> -m <input_mask> -d2 <input_dcm2> -o <output_mask> [options]
  ```
 
-Where:
+**Required arguments:**
 
-- **input_dcm1** is the path to the first DICOM folder.
-- **input_mask** is the path to the mask file.
-- **input_dcm2** is the path to the second DICOM folder.
-- **output_mask** is the path to the output NIFTI file.
+- **-d1, --input_dcm1** - Path to the first DICOM folder (source/reference)
+- **-m, --input_mask** - Path to the mask file (NIFTI format)
+- **-d2, --input_dcm2** - Path to the second DICOM folder (target)
+- **-o, --output_mask** - Path to the output NIFTI file
 
-### Example
+**Optional arguments:**
 
-To align the mask image mask.nii.gz with the images in the DICOM folder dicom_folder_2, using the images in the DICOM folder dicom_folder_1 as reference, and save the resulting image in the file output_mask.nii.gz, run the following command:
+- **--reverse** - Slice direction mode: `auto` (default), `true`, or `false`
+  - `auto`: Tries both directions and picks the one with more preserved ROIs
+  - `true`: Force reverse slice order
+  - `false`: Force normal slice order
 
+- **--subpixel N** - Upsample target Z-axis by factor N before registration, then downsample with OR-logic (default: 1 = disabled). Useful for preserving small structures when downsampling to lower resolution.
+
+### Examples
+
+Basic registration with auto-detection:
  ```bash
 uv run maskregistration -d1 dicom_folder_1 -m mask.nii.gz -d2 dicom_folder_2 -o output_mask.nii.gz
+ ```
+
+With subpixel upsampling (preserves small ROIs during heavy downsampling):
+ ```bash
+uv run maskregistration -d1 dicom_folder_1 -m mask.nii.gz -d2 dicom_folder_2 -o output_mask.nii.gz --subpixel 9
  ```
 
 ## Graphical User Interface (GUI)
