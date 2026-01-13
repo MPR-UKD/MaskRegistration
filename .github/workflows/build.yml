@@ -1,0 +1,60 @@
+name: Build macOS
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Build CLI
+        run: |
+          uv run pyinstaller --onefile --windowed \
+            --collect-submodules=pydicom \
+            --add-data="./src/MaskRegistration/loading.gif:." \
+            --noconsole \
+            --name MaskRegistration \
+            src/MaskRegistration/MaskRegistration.py \
+            --noconfirm
+
+      - name: Build GUI
+        run: |
+          uv run pyinstaller --onefile --windowed \
+            --collect-submodules=pydicom \
+            --add-data="./src/MaskRegistration/loading.gif:." \
+            --noconsole \
+            --name MaskRegistrationGUI \
+            src/MaskRegistration/MaskRegistrationGUI.py \
+            --noconfirm
+
+      - name: Create ZIP archive
+        run: |
+          cd dist
+          zip -r MaskRegistration_macos.zip MaskRegistration.app MaskRegistrationGUI.app
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MaskRegistration_macos
+          path: dist/MaskRegistration_macos.zip
+
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/MaskRegistration_macos.zip
