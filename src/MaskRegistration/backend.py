@@ -100,6 +100,7 @@ def transform(
     dicom_names = split_dcm(reader.GetGDCMSeriesFileNames(input_dicom_folder_2.as_posix()))[0]
 
     auto_detect = reverse is None
+    used_reverse = reverse
 
     if auto_detect:
         # Try both directions, pick the better one
@@ -119,8 +120,10 @@ def transform(
 
         if score_reverse > score_normal:
             registered, target, _ = results[True]
+            used_reverse = True
         else:
             registered, target, _ = results[False]
+            used_reverse = False
     else:
         # Use specified direction
         names = dicom_names[::-1] if reverse else dicom_names
@@ -139,3 +142,5 @@ def transform(
     nib.save(img_nifti, out_nii_file)
 
     temp_dir_mask_as_dcm.cleanup()
+
+    return {"used_reverse": used_reverse}

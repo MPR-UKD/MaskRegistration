@@ -13,8 +13,10 @@ dependencies = [
     "nibabel>=5.1.0",
     "numpy>=1.25.0",
     "pydicom>=2.4.1",
-    "pyqt6>=6.5.1",
     "simpleitk>=2.2.1",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "pillow>=10.0.0",
 ]
 
 [project.optional-dependencies]
@@ -23,12 +25,11 @@ dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
     "pytest-html>=3.2.0",
-    "pyinstaller>=5.13.0",
 ]
 
 [project.scripts]
 maskregistration = "MaskRegistration.MaskRegistration:main"
-maskregistration-gui = "MaskRegistration.MaskRegistrationGUI:main"
+maskregistration-web = "MaskRegistration.web.app:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MaskRegistration</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app">
+        <aside class="sidebar">
+            <div class="logo">MaskReg</div>
+
+            <div class="section">
+                <div class="section-title">Source</div>
+                <div class="path-input">
+                    <input type="text" id="source-dicom-path" placeholder="DICOM folder" value="test_data/dess">
+                    <button onclick="browse('source-dicom-path', 'dir')">...</button>
+                </div>
+                <div class="path-input">
+                    <input type="text" id="source-mask-path" placeholder="Mask file" value="test_data/mask_dess.nii.gz">
+                    <button onclick="browse('source-mask-path', 'file')">...</button>
+                </div>
+                <div class="btn-row">
+                    <button class="btn-load" onclick="loadDicom('source')">Load DICOM</button>
+                    <button class="btn-load" onclick="loadMask('source')">Load Mask</button>
+                </div>
+                <div class="echo-row" id="source-echo-control" style="display: none;">
+                    <span>Echo</span>
+                    <div class="echo-buttons" id="source-echo-buttons"></div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Target</div>
+                <div class="path-input">
+                    <input type="text" id="target-dicom-path" placeholder="DICOM folder" value="test_data/t2_star">
+                    <button onclick="browse('target-dicom-path', 'dir')">...</button>
+                </div>
+                <div class="btn-row">
+                    <button class="btn-load" onclick="loadDicom('target')">Load DICOM</button>
+                </div>
+                <div class="echo-row" id="target-echo-control" style="display: none;">
+                    <span>Echo</span>
+                    <div class="echo-buttons" id="target-echo-buttons"></div>
+                </div>
+            </div>
+
+            <div class="section" id="spatial-section" style="display: none;">
+                <div class="section-title">Spatial</div>
+                <canvas id="spatial-canvas" width="200" height="150"></canvas>
+                <div class="spatial-stats">
+                    <div class="stat"><span>Overlap</span><span id="overlap-pct">-</span></div>
+                    <div class="stat"><span>Offset</span><span id="offset-mm">-</span></div>
+                </div>
+                <div id="spatial-status"></div>
+            </div>
+
+            <div class="section" id="settings-section">
+                <div class="section-title">Settings</div>
+                <div class="option-row">
+                    <label>Direction</label>
+                    <select id="reverse-select">
+                        <option value="auto">Auto</option>
+                        <option value="normal">Normal</option>
+                        <option value="reverse">Reverse</option>
+                    </select>
+                </div>
+                <div class="option-row">
+                    <label>Subpixel</label>
+                    <input type="number" id="subpixel-input" min="1" max="20" value="1">
+                </div>
+                <button class="btn-run" id="run-button" onclick="runRegistration()" style="display: none;">Re-Register</button>
+            </div>
+
+            <div class="section" id="export-section" style="display: none;">
+                <div class="section-title">Export</div>
+                <button class="btn-export" id="export-button" onclick="exportMask()">Export Mask</button>
+            </div>
+
+            <div id="status-bar"></div>
+        </aside>
+
+        <main class="viewer-area">
+            <div class="viewer-container" id="viewer-container">
+                <canvas id="source-canvas" class="viewer-canvas"></canvas>
+                <canvas id="target-canvas" class="viewer-canvas"></canvas>
+                <div class="curtain horizontal" id="curtain">
+                    <div class="curtain-line"></div>
+                    <div class="curtain-handle" id="curtain-handle">↔</div>
+                </div>
+                <div class="viewer-placeholder" id="viewer-placeholder">Load DICOM to start</div>
+            </div>
+
+            <div class="viewer-controls">
+                <div class="control-group">
+                    <div class="mode-toggle">
+                        <button class="mode-btn active" data-mode="curtain">Curtain</button>
+                        <button class="mode-btn" data-mode="blend">Blend</button>
+                        <button class="mode-btn" data-mode="split">Split</button>
+                        <button class="mode-btn" data-mode="source">Source</button>
+                        <button class="mode-btn" data-mode="target">Target</button>
+                    </div>
+                    <div class="dir-toggle" id="dir-toggle">
+                        <button class="dir-btn active" data-dir="horizontal" title="Left/Right">↔</button>
+                        <button class="dir-btn" data-dir="vertical" title="Top/Bottom">↕</button>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label>Source</label>
+                    <button class="slice-btn" onclick="changeSlice('source', -1)">&lt;</button>
+                    <input type="range" id="slice-slider" min="0" max="0" value="0" disabled>
+                    <button class="slice-btn" onclick="changeSlice('source', 1)">&gt;</button>
+                    <span id="slice-info">0 / 0</span>
+                </div>
+                <div class="control-group dual-slice-control" id="target-slice-control" style="display: none;">
+                    <label>Target</label>
+                    <button class="slice-btn" onclick="changeSlice('target', -1)">&lt;</button>
+                    <input type="range" id="target-slice-slider" min="0" max="0" value="0" disabled>
+                    <button class="slice-btn" onclick="changeSlice('target', 1)">&gt;</button>
+                    <span id="target-slice-slider-info">0 / 0</span>
+                </div>
+                <div class="control-group">
+                    <label>Zoom</label>
+                    <input type="range" id="zoom-slider" min="50" max="400" value="100">
+                    <span id="zoom-info">100%</span>
+                </div>
+                <div class="control-group blend-control" style="display: none;">
+                    <label>Blend</label>
+                    <input type="range" id="blend-slider" min="0" max="100" value="50">
+                    <span id="blend-info">50%</span>
+                </div>
+                <div class="control-group" id="align-toggle-control" style="display: none;">
+                    <div class="mode-toggle">
+                        <button class="mode-btn active" data-align="aligned">Aligned</button>
+                        <button class="mode-btn" data-align="original">Original</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
