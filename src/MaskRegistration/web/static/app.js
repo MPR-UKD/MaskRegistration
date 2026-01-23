@@ -1,6 +1,22 @@
 const state = {
     source: { slices: 0, hasMask: false, size: [0, 0], origin: [0, 0, 0], spacing: [1, 1, 1], echos: 1, currentEcho: 0, imageData: null },
-    target: { slices: 0, hasMask: false, size: [0, 0], origin: [0, 0, 0], spacing: [1, 1, 1], echos: 1, currentEcho: 0, imageData: null, originalImageData: null, manualTransformData: null },
+    target: {
+        slices: 0,
+        hasMask: false,
+        size: [0, 0],
+        origin: [0, 0, 0],
+        spacing: [1, 1, 1],
+        echos: 1,
+        currentEcho: 0,
+        imageData: null,
+        originalImageData: null,
+        manualTransformData: null,
+        maskMode: 'off',
+        hasRegisteredMask: false,
+        hasCustomMask: false
+    },
+    lastDicomParent: '',
+    pan: { x: 0, y: 0, isDragging: false, lastX: 0, lastY: 0, canPan: false },
     mode: 'curtain',
     curtainPos: 0.5,
     curtainDir: 'horizontal',
@@ -103,11 +119,79 @@ function updateTargetViewVisibility() {
     document.getElementById('target-view-control').style.display = show ? 'flex' : 'none';
 }
 
+function updateTargetMaskControls() {
+    const control = document.getElementById('target-mask-control');
+    const hasRegistered = state.target.hasRegisteredMask;
+    const hasCustom = state.target.hasCustomMask;
+    const show = hasRegistered || hasCustom;
+    if (control) control.style.display = show ? 'flex' : 'none';
+
+    if (state.target.maskMode === 'registered' && !hasRegistered) {
+        state.target.maskMode = hasCustom ? 'custom' : 'off';
+    }
+    if (state.target.maskMode === 'custom' && !hasCustom) {
+        state.target.maskMode = hasRegistered ? 'registered' : 'off';
+    }
+    if (!show) state.target.maskMode = 'off';
+
+    document.querySelectorAll('[data-target-mask]').forEach(btn => {
+        const mode = btn.dataset.targetMask;
+        let enabled = true;
+        if (mode === 'registered') enabled = hasRegistered;
+        if (mode === 'custom') enabled = hasCustom;
+        btn.disabled = !enabled;
+        btn.classList.toggle('active', mode === state.target.maskMode);
+    });
+}
+
+function getTargetMaskQuery() {
+    const mode = state.target.maskMode;
+    if (mode === 'off') return { mask: false };
+    const hasMask = mode === 'custom' ? state.target.hasCustomMask : state.target.hasRegisteredMask;
+    if (!hasMask) return { mask: false };
+    return { mask: true, maskMode: mode };
+}
+
+function getOriginalTargetMaskQuery() {
+    if (state.target.hasCustomMask) {
+        return { mask: true, maskMode: 'custom' };
+    }
+    if (state.target.hasRegisteredMask) {
+        return { mask: true, maskMode: 'registered' };
+    }
+    return { mask: false };
+}
+
 function setTargetView(view) {
     state.targetView = view;
     document.querySelectorAll('[data-target-view]').forEach(b => {
         b.classList.toggle('active', b.dataset.targetView === view);
     });
+}
+
+function resetPan() {
+    state.pan.x = 0;
+    state.pan.y = 0;
+    state.pan.isDragging = false;
+    state.pan.canPan = false;
+}
+
+function normalizePath(path) {
+    return (path || '').trim().replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
+function getParentDir(path) {
+    const normalized = normalizePath(path);
+    if (!normalized) return '';
+    const parts = normalized.split('/');
+    if (parts.length <= 1) return normalized;
+    parts.pop();
+    return parts.join('/') || '/';
+}
+
+function setLastDicomParent(path) {
+    const parent = getParentDir(path);
+    if (parent) state.lastDicomParent = parent;
 }
 
 function getComputedBaseline() {
@@ -207,13 +291,22 @@ async function loadDicom(side) {
         if (!res.ok) throw new Error((await res.json()).detail);
 
         const data = await res.json();
+        setLastDicomParent(path);
+        resetPan();
         state[side].slices = data.slices;
         state[side].size = data.size;
         state[side].origin = data.origin;
         state[side].spacing = data.spacing;
         state[side].echos = data.echos || 1;
         state[side].currentEcho = 0;
-        state[side].hasMask = false;
+        if (side === 'source') {
+            state.source.hasMask = false;
+        } else {
+            state.target.hasRegisteredMask = false;
+            state.target.hasCustomMask = false;
+            state.target.maskMode = 'off';
+            updateTargetMaskControls();
+        }
         resetManualTransformUI();
 
         const slider = document.getElementById('slice-slider');
@@ -280,7 +373,13 @@ async function loadMask(side) {
         });
         if (!res.ok) throw new Error((await res.json()).detail);
 
-        state[side].hasMask = true;
+        if (side === 'source') {
+            state.source.hasMask = true;
+        } else {
+            state.target.hasCustomMask = true;
+            state.target.maskMode = 'custom';
+            updateTargetMaskControls();
+        }
         await updateSlice();
         hideStatus();
         updateUI();
@@ -325,7 +424,11 @@ async function pollRegistration(taskId) {
     if (data.status === 'done') {
         state.registrationDone = true;
         state.settingsChanged = false;
-        state.target.hasMask = true;
+        state.target.hasRegisteredMask = true;
+        if (state.target.maskMode === 'off') {
+            state.target.maskMode = 'registered';
+        }
+        updateTargetMaskControls();
 
         // Update direction dropdown if auto was used
         if (data.used_direction) {
@@ -371,6 +474,20 @@ async function exportMask() {
     }
 }
 
+async function resetAll() {
+    const confirmed = window.confirm('Reset all loaded data?');
+    if (!confirmed) return;
+    showStatus('Resetting...', 'info');
+    try {
+        const res = await fetch('/api/reset', { method: 'POST' });
+        if (!res.ok) throw new Error((await res.json()).detail || 'Reset failed');
+    } catch (e) {
+        showStatus(`Reset error: ${e.message}`, 'error');
+        return;
+    }
+    window.location.reload();
+}
+
 async function loadSourceImage() {
     if (state.source.slices === 0) return null;
     const url = `/api/slice/source/${state.currentSlice}?mask=${state.source.hasMask}&t=${Date.now()}`;
@@ -385,7 +502,14 @@ async function loadSourceImage() {
 async function loadTargetAligned() {
     if (state.target.slices === 0) return null;
     const reverse = state.direction === 'reverse';
-    const url = `/api/slice/aligned/${state.currentSlice}?mask=${state.target.hasMask}&reverse=${reverse}&t=${Date.now()}`;
+    const maskQuery = getTargetMaskQuery();
+    const params = new URLSearchParams({
+        mask: maskQuery.mask,
+        reverse,
+        t: Date.now()
+    });
+    if (maskQuery.maskMode) params.set('mask_mode', maskQuery.maskMode);
+    const url = `/api/slice/aligned/${state.currentSlice}?${params}`;
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => resolve(img);
@@ -437,7 +561,15 @@ async function loadTargetOriginal() {
     if (state.direction === 'reverse') {
         targetSliceIdx = state.target.slices - 1 - targetSliceIdx;
     }
-    const url = `/api/slice/target/${targetSliceIdx}?mask=${state.target.hasMask}&t=${Date.now()}`;
+    const maskQuery = state.targetView === 'original'
+        ? getOriginalTargetMaskQuery()
+        : getTargetMaskQuery();
+    const params = new URLSearchParams({
+        mask: maskQuery.mask,
+        t: Date.now()
+    });
+    if (maskQuery.maskMode) params.set('mask_mode', maskQuery.maskMode);
+    const url = `/api/slice/target/${targetSliceIdx}?${params}`;
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => resolve(img);
@@ -453,8 +585,9 @@ async function loadTargetWithManualTransform() {
     const mt = state.manualTransform;
     const reverse = state.direction === 'reverse';
     const sliceIndex = state.targetSlice;
+    const maskQuery = getTargetMaskQuery();
     const params = new URLSearchParams({
-        mask: state.target.hasMask,
+        mask: maskQuery.mask,
         offset_x: mt.offset.x,
         offset_y: mt.offset.y,
         offset_z: mt.offset.z,
@@ -471,6 +604,7 @@ async function loadTargetWithManualTransform() {
         reverse,
         t: Date.now()
     });
+    if (maskQuery.maskMode) params.set('mask_mode', maskQuery.maskMode);
     const url = `/api/transform/${sliceIndex}?${params}`;
     return new Promise((resolve) => {
         const img = new Image();
@@ -550,7 +684,11 @@ function renderViewer() {
         targetImg = state.target.originalImageData;
     }
 
-    if (!sourceImg && !targetImg) return;
+    if (!sourceImg && !targetImg) {
+        state.pan.canPan = false;
+        container.style.cursor = 'default';
+        return;
+    }
 
     const containerW = container.clientWidth;
     const containerH = container.clientHeight;
@@ -559,32 +697,56 @@ function renderViewer() {
         curtain.style.display = 'none';
         container.classList.add('split-mode');
 
-        const gap = 20;
-        const availW = (containerW - gap) / 2;
+        const gap = 24;
+        const paneW = Math.max(1, Math.floor((containerW - gap) / 2));
+        const paneH = containerH;
 
-        const renderSplit = (canvas, img) => {
-            if (!img) {
+        const getSplitMetrics = (img) => {
+            if (!img) return null;
+            const scale = Math.min(paneW / img.width, paneH / img.height) * state.zoom;
+            const w = Math.floor(img.width * scale);
+            const h = Math.floor(img.height * scale);
+            const maxPanX = Math.max(0, (w - paneW) / 2);
+            const maxPanY = Math.max(0, (h - paneH) / 2);
+            return { w, h, maxPanX, maxPanY };
+        };
+
+        const sourceMetrics = getSplitMetrics(sourceImg);
+        const targetMetrics = getSplitMetrics(targetImg);
+        const metricsList = [sourceMetrics, targetMetrics].filter(Boolean);
+        const maxPanX = metricsList.length ? Math.min(...metricsList.map(m => m.maxPanX)) : 0;
+        const maxPanY = metricsList.length ? Math.min(...metricsList.map(m => m.maxPanY)) : 0;
+        state.pan.x = Math.min(maxPanX, Math.max(-maxPanX, state.pan.x));
+        state.pan.y = Math.min(maxPanY, Math.max(-maxPanY, state.pan.y));
+        const canPan = maxPanX > 0 || maxPanY > 0;
+        state.pan.canPan = canPan;
+        container.style.cursor = state.pan.isDragging ? 'grabbing' : (canPan ? 'grab' : 'default');
+
+        const renderSplit = (canvas, img, metrics) => {
+            if (!img || !metrics) {
                 canvas.style.display = 'none';
                 return;
             }
             canvas.style.display = 'block';
-            const scale = Math.min(availW / img.width, containerH / img.height) * state.zoom;
-            const w = Math.floor(img.width * scale);
-            const h = Math.floor(img.height * scale);
-            canvas.width = w;
-            canvas.height = h;
-            canvas.style.width = w + 'px';
-            canvas.style.height = h + 'px';
+            canvas.style.position = 'relative';
+            canvas.style.left = '0';
+            canvas.style.top = '0';
+            canvas.width = paneW;
+            canvas.height = paneH;
+            canvas.style.width = paneW + 'px';
+            canvas.style.height = paneH + 'px';
             canvas.style.clipPath = 'none';
             canvas.style.opacity = 1;
-            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            const offsetX = Math.round((paneW - metrics.w) / 2 + state.pan.x);
+            const offsetY = Math.round((paneH - metrics.h) / 2 + state.pan.y);
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, paneW, paneH);
+            ctx.drawImage(img, offsetX, offsetY, metrics.w, metrics.h);
         };
 
-        renderSplit(sourceCanvas, sourceImg);
-        renderSplit(targetCanvas, targetImg);
+        renderSplit(sourceCanvas, sourceImg, sourceMetrics);
+        renderSplit(targetCanvas, targetImg, targetMetrics);
 
-        sourceCanvas.style.position = 'relative';
-        targetCanvas.style.position = 'relative';
         return;
     }
 
@@ -601,12 +763,24 @@ function renderViewer() {
     const w = Math.floor(baseW * displayScale);
     const h = Math.floor(baseH * displayScale);
 
+    const maxPanX = Math.max(0, (w - containerW) / 2);
+    const maxPanY = Math.max(0, (h - containerH) / 2);
+    state.pan.x = Math.min(maxPanX, Math.max(-maxPanX, state.pan.x));
+    state.pan.y = Math.min(maxPanY, Math.max(-maxPanY, state.pan.y));
+    const panOffsetX = Math.round((containerW - w) / 2 + state.pan.x);
+    const panOffsetY = Math.round((containerH - h) / 2 + state.pan.y);
+    const canPan = maxPanX > 0 || maxPanY > 0;
+    state.pan.canPan = canPan;
+    container.style.cursor = state.pan.isDragging ? 'grabbing' : (canPan ? 'grab' : 'default');
+
     [sourceCanvas, targetCanvas].forEach(canvas => {
         canvas.style.display = 'block';
         canvas.width = w;
         canvas.height = h;
         canvas.style.width = w + 'px';
         canvas.style.height = h + 'px';
+        canvas.style.left = panOffsetX + 'px';
+        canvas.style.top = panOffsetY + 'px';
     });
 
     const sourceCtx = sourceCanvas.getContext('2d');
@@ -650,18 +824,18 @@ function renderViewer() {
         if (state.curtainDir === 'horizontal') {
             sourceCanvas.style.clipPath = `inset(0 ${100 - pos}% 0 0)`;
             targetCanvas.style.clipPath = `inset(0 0 0 ${pos}%)`;
-            curtain.style.left = `calc(50% + ${(state.curtainPos - 0.5) * w}px)`;
-            curtain.style.top = '0';
+            curtain.style.left = `${Math.round(panOffsetX + state.curtainPos * w)}px`;
+            curtain.style.top = `${panOffsetY}px`;
             curtain.style.width = '3px';
-            curtain.style.height = '100%';
+            curtain.style.height = `${h}px`;
             curtain.style.cursor = 'ew-resize';
             curtain.style.transform = 'translateX(-50%)';
         } else {
             sourceCanvas.style.clipPath = `inset(0 0 ${100 - pos}% 0)`;
             targetCanvas.style.clipPath = `inset(${pos}% 0 0 0)`;
-            curtain.style.left = '0';
-            curtain.style.top = `calc(50% + ${(state.curtainPos - 0.5) * h}px)`;
-            curtain.style.width = '100%';
+            curtain.style.left = `${panOffsetX}px`;
+            curtain.style.top = `${Math.round(panOffsetY + state.curtainPos * h)}px`;
+            curtain.style.width = `${w}px`;
             curtain.style.height = '3px';
             curtain.style.cursor = 'ns-resize';
             curtain.style.transform = 'translateY(-50%)';
@@ -722,14 +896,21 @@ async function changeEcho(side, echoIdx) {
 
 async function browse(inputId, mode) {
     const input = document.getElementById(inputId);
+    const currentParent = getParentDir(input.value);
+    const initialDir = state.lastDicomParent || currentParent;
     try {
         const res = await fetch('/api/browse', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode, initial_dir: input.value.split('/').slice(0, -1).join('/') })
+            body: JSON.stringify({ mode, initial_dir: initialDir })
         });
         const data = await res.json();
-        if (data.path) input.value = data.path;
+        if (data.path) {
+            input.value = data.path;
+            if (mode === 'dir' && (inputId === 'source-dicom-path' || inputId === 'target-dicom-path')) {
+                setLastDicomParent(data.path);
+            }
+        }
     } catch (e) {}
 }
 
@@ -915,6 +1096,15 @@ document.querySelectorAll('[data-target-view]').forEach(btn => {
     });
 });
 
+document.querySelectorAll('[data-target-mask]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (btn.disabled) return;
+        state.target.maskMode = btn.dataset.targetMask;
+        updateTargetMaskControls();
+        updateSlice();
+    });
+});
+
 document.getElementById('reverse-select').addEventListener('change', (e) => {
     state.direction = e.target.value;
     if (state.registrationDone) {
@@ -949,6 +1139,32 @@ window.addEventListener('mousemove', (e) => {
     renderViewer();
 });
 window.addEventListener('mouseup', () => draggingCurtain = false);
+
+// Pan drag
+const viewerContainer = document.getElementById('viewer-container');
+viewerContainer.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest('#curtain')) return;
+    if (!state.pan.canPan) return;
+    state.pan.isDragging = true;
+    state.pan.lastX = e.clientX;
+    state.pan.lastY = e.clientY;
+});
+window.addEventListener('mousemove', (e) => {
+    if (!state.pan.isDragging) return;
+    const dx = e.clientX - state.pan.lastX;
+    const dy = e.clientY - state.pan.lastY;
+    state.pan.lastX = e.clientX;
+    state.pan.lastY = e.clientY;
+    state.pan.x += dx;
+    state.pan.y += dy;
+    renderViewer();
+});
+window.addEventListener('mouseup', () => {
+    if (!state.pan.isDragging) return;
+    state.pan.isDragging = false;
+    renderViewer();
+});
 
 // Spatial drag
 const spatialCanvas = document.getElementById('spatial-canvas');
@@ -1023,3 +1239,4 @@ transformValueInputs.forEach(id => {
 });
 
 syncTransformInputs();
+updateTargetMaskControls();

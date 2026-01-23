@@ -47,7 +47,8 @@ class DataStore:
         self.source_echos: EchoData = EchoData()
         self.target_echos: EchoData = EchoData()
         self.source_mask: np.ndarray | None = None
-        self.target_mask: np.ndarray | None = None
+        self.target_mask_registered: np.ndarray | None = None
+        self.target_mask_custom: np.ndarray | None = None
         self.target_mask_meta: ImageMeta | None = None
         self.source_path: str = ""
         self.target_path: str = ""
@@ -68,8 +69,28 @@ class DataStore:
             return None
         return echos.metas[echos.current_echo]
 
+    def reset(self) -> None:
+        self.source_echos = EchoData()
+        self.target_echos = EchoData()
+        self.source_mask = None
+        self.target_mask_registered = None
+        self.target_mask_custom = None
+        self.target_mask_meta = None
+        self.source_path = ""
+        self.target_path = ""
+        self.source_mask_path = ""
+        self.output_path = ""
+        self.temp_output_path = ""
+        self.tasks = {}
+
 
 store = DataStore()
+
+
+def select_target_mask(mask_mode: str) -> tuple[np.ndarray | None, ImageMeta | None]:
+    if mask_mode == "custom":
+        return store.target_mask_custom, None
+    return store.target_mask_registered, store.target_mask_meta
 
 
 class PathRequest(BaseModel):
@@ -244,14 +265,20 @@ def load_mask(side: Literal["source", "target"], req: PathRequest):
         store.source_mask = arr
         store.source_mask_path = req.path
     else:
-        store.target_mask = arr
+        store.target_mask_custom = arr
 
     labels = np.unique(arr[arr > 0]).tolist()
     return {"slices": arr.shape[0], "labels": labels}
 
 
 @app.get("/api/slice/aligned/{index}")
-def get_aligned_slice(index: int, mask: bool = False, reverse: bool = False, t: str = None):
+def get_aligned_slice(
+    index: int,
+    mask: bool = False,
+    mask_mode: Literal["registered", "custom"] = "registered",
+    reverse: bool = False,
+    t: str = None
+):
     source_dicom = store.get_dicom("source")
     target_dicom = store.get_dicom("target")
     source_meta = store.get_meta("source")
@@ -284,26 +311,27 @@ def get_aligned_slice(index: int, mask: bool = False, reverse: bool = False, t: 
     aligned_arr = sitk.GetArrayFromImage(aligned)
 
     mask_vol = None
-    if mask and store.target_mask is not None:
-        mask_data = store.target_mask
-        if reverse:
-            mask_data = mask_data[::-1, :, :]
-        mask_img = sitk.GetImageFromArray(mask_data.astype(np.float32))
-        mask_meta = store.target_mask_meta if store.target_mask_meta else target_meta
-        mask_img.SetOrigin(mask_meta.origin)
-        mask_img.SetSpacing(mask_meta.spacing)
-        mask_img.SetDirection(mask_meta.direction)
+    if mask:
+        mask_data, mask_meta = select_target_mask(mask_mode)
+        if mask_data is not None:
+            if reverse:
+                mask_data = mask_data[::-1, :, :]
+            mask_img = sitk.GetImageFromArray(mask_data.astype(np.float32))
+            mask_meta = mask_meta if mask_meta else target_meta
+            mask_img.SetOrigin(mask_meta.origin)
+            mask_img.SetSpacing(mask_meta.spacing)
+            mask_img.SetDirection(mask_meta.direction)
 
-        mask_resampler = sitk.ResampleImageFilter()
-        mask_resampler.SetSize([source_meta.size[0], source_meta.size[1], source_meta.size[2]])
-        mask_resampler.SetOutputOrigin(source_meta.origin)
-        mask_resampler.SetOutputSpacing(source_meta.spacing)
-        mask_resampler.SetOutputDirection(source_meta.direction)
-        mask_resampler.SetInterpolator(sitk.sitkNearestNeighbor)
-        mask_resampler.SetDefaultPixelValue(0)
+            mask_resampler = sitk.ResampleImageFilter()
+            mask_resampler.SetSize([source_meta.size[0], source_meta.size[1], source_meta.size[2]])
+            mask_resampler.SetOutputOrigin(source_meta.origin)
+            mask_resampler.SetOutputSpacing(source_meta.spacing)
+            mask_resampler.SetOutputDirection(source_meta.direction)
+            mask_resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+            mask_resampler.SetDefaultPixelValue(0)
 
-        aligned_mask = mask_resampler.Execute(mask_img)
-        mask_vol = sitk.GetArrayFromImage(aligned_mask).astype(np.uint8)
+            aligned_mask = mask_resampler.Execute(mask_img)
+            mask_vol = sitk.GetArrayFromImage(aligned_mask).astype(np.uint8)
 
     if mask_vol is not None:
         png = slice_with_mask_to_png(aligned_arr, mask_vol, index)
@@ -314,7 +342,13 @@ def get_aligned_slice(index: int, mask: bool = False, reverse: bool = False, t: 
 
 
 @app.get("/api/slice/{side}/{index}")
-def get_slice(side: Literal["source", "target"], index: int, mask: bool = False, t: str = None):
+def get_slice(
+    side: Literal["source", "target"],
+    index: int,
+    mask: bool = False,
+    mask_mode: Literal["registered", "custom"] = "registered",
+    t: str = None
+):
     dicom = store.get_dicom(side)
     if dicom is None:
         raise HTTPException(400, f"No {side} DICOM loaded")
@@ -324,7 +358,10 @@ def get_slice(side: Literal["source", "target"], index: int, mask: bool = False,
 
     mask_vol = None
     if mask:
-        mask_vol = store.source_mask if side == "source" else store.target_mask
+        if side == "source":
+            mask_vol = store.source_mask
+        else:
+            mask_vol, _ = select_target_mask(mask_mode)
 
     if mask_vol is not None:
         png = slice_with_mask_to_png(dicom, mask_vol, index)
@@ -338,6 +375,7 @@ def get_slice(side: Literal["source", "target"], index: int, mask: bool = False,
 def get_transformed_slice(
     index: int,
     mask: str = "false",
+    mask_mode: Literal["registered", "custom"] = "registered",
     offset_x: float = 0, offset_y: float = 0, offset_z: float = 0,
     rotation_x: float = 0, rotation_y: float = 0, rotation_z: float = 0,
     scale_x: float = 1, scale_y: float = 1, scale_z: float = 1,
@@ -419,27 +457,28 @@ def get_transformed_slice(
 
     # Handle mask if requested
     mask_vol = None
-    if mask and store.target_mask is not None:
-        mask_data = store.target_mask
-        if reverse:
-            mask_data = mask_data[::-1, :, :]
-        mask_img = sitk.GetImageFromArray(mask_data.astype(np.float32))
-        mask_meta = store.target_mask_meta if store.target_mask_meta else target_meta
-        mask_img.SetOrigin(mask_meta.origin)
-        mask_img.SetSpacing(mask_meta.spacing)
-        mask_img.SetDirection(mask_meta.direction)
+    if mask:
+        mask_data, mask_meta = select_target_mask(mask_mode)
+        if mask_data is not None:
+            if reverse:
+                mask_data = mask_data[::-1, :, :]
+            mask_img = sitk.GetImageFromArray(mask_data.astype(np.float32))
+            mask_meta = mask_meta if mask_meta else target_meta
+            mask_img.SetOrigin(mask_meta.origin)
+            mask_img.SetSpacing(mask_meta.spacing)
+            mask_img.SetDirection(mask_meta.direction)
 
-        mask_resampler = sitk.ResampleImageFilter()
-        mask_resampler.SetSize([output_meta.size[0], output_meta.size[1], output_meta.size[2]])
-        mask_resampler.SetOutputOrigin(output_meta.origin)
-        mask_resampler.SetOutputSpacing(output_spacing)
-        mask_resampler.SetOutputDirection(output_meta.direction)
-        mask_resampler.SetInterpolator(sitk.sitkNearestNeighbor)
-        mask_resampler.SetDefaultPixelValue(0)
-        mask_resampler.SetTransform(transform)
+            mask_resampler = sitk.ResampleImageFilter()
+            mask_resampler.SetSize([output_meta.size[0], output_meta.size[1], output_meta.size[2]])
+            mask_resampler.SetOutputOrigin(output_meta.origin)
+            mask_resampler.SetOutputSpacing(output_spacing)
+            mask_resampler.SetOutputDirection(output_meta.direction)
+            mask_resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+            mask_resampler.SetDefaultPixelValue(0)
+            mask_resampler.SetTransform(transform)
 
-        aligned_mask = mask_resampler.Execute(mask_img)
-        mask_vol = sitk.GetArrayFromImage(aligned_mask).astype(np.uint8)
+            aligned_mask = mask_resampler.Execute(mask_img)
+            mask_vol = sitk.GetArrayFromImage(aligned_mask).astype(np.uint8)
 
     if mask_vol is not None:
         png = slice_with_mask_to_png(aligned_arr, mask_vol, index)
@@ -453,6 +492,20 @@ def get_transformed_slice(
 def set_output(req: PathRequest):
     store.output_path = req.path
     return {"path": req.path}
+
+
+@app.post("/api/reset")
+def reset_state():
+    temp_output = store.temp_output_path
+    store.reset()
+    if temp_output:
+        try:
+            path = Path(temp_output)
+            if path.exists():
+                path.unlink()
+        except Exception:
+            pass
+    return {"status": "ok"}
 
 
 def direction_to_rotation(direction: tuple) -> dict:
@@ -587,7 +640,7 @@ def register(req: RegisterRequest):
             )
             nii_img = sitk.ReadImage(output_file)
             arr = sitk.GetArrayFromImage(nii_img)
-            store.target_mask = arr
+            store.target_mask_registered = arr
             store.target_mask_meta = ImageMeta(
                 origin=nii_img.GetOrigin(),
                 spacing=nii_img.GetSpacing(),

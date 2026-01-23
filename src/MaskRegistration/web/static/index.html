@@ -37,8 +37,21 @@
                     <input type="text" id="target-dicom-path" placeholder="DICOM folder" value="test_data/t2_star">
                     <button onclick="browse('target-dicom-path', 'dir')">...</button>
                 </div>
+                <div class="path-input">
+                    <input type="text" id="target-mask-path" placeholder="Mask file (optional)" value="">
+                    <button onclick="browse('target-mask-path', 'file')">...</button>
+                </div>
                 <div class="btn-row">
                     <button class="btn-load" onclick="loadDicom('target')">Load DICOM</button>
+                    <button class="btn-load" onclick="loadMask('target')">Load Mask</button>
+                </div>
+                <div class="mask-toggle" id="target-mask-control" style="display: none;">
+                    <label>Mask</label>
+                    <div class="mode-toggle">
+                        <button class="mode-btn" data-target-mask="registered">Transformed</button>
+                        <button class="mode-btn" data-target-mask="custom">Custom</button>
+                        <button class="mode-btn active" data-target-mask="off">Off</button>
+                    </div>
                 </div>
                 <div class="echo-row" id="target-echo-control" style="display: none;">
                     <span>Echo</span>
@@ -157,6 +170,11 @@
             <div class="section" id="export-section" style="display: none;">
                 <div class="section-title">Export</div>
                 <button class="btn-export" id="export-button" onclick="exportMask()">Export Mask</button>
+            </div>
+
+            <div class="section" id="reset-section">
+                <div class="section-title">Session</div>
+                <button class="btn-reset" id="reset-button" onclick="resetAll()">Reset All</button>
             </div>
 
             <div id="status-bar"></div>
