@@ -1,6 +1,6 @@
 [project]
 name = "maskregistration"
-version = "0.1.0"
+version = "0.2.0"
 description = "Medical image registration tool for aligning segmentation masks"
 authors = [
     {name = "Ludger Radke", email = "113907719+ludgerradke@users.noreply.github.com"}
