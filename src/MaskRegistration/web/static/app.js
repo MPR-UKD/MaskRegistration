@@ -1,6 +1,6 @@
 const state = {
     source: { slices: 0, hasMask: false, size: [0, 0], origin: [0, 0, 0], spacing: [1, 1, 1], echos: 1, currentEcho: 0, imageData: null },
-    target: { slices: 0, hasMask: false, size: [0, 0], origin: [0, 0, 0], spacing: [1, 1, 1], echos: 1, currentEcho: 0, imageData: null, originalImageData: null },
+    target: { slices: 0, hasMask: false, size: [0, 0], origin: [0, 0, 0], spacing: [1, 1, 1], echos: 1, currentEcho: 0, imageData: null, originalImageData: null, manualTransformData: null },
     mode: 'curtain',
     curtainPos: 0.5,
     curtainDir: 'horizontal',
@@ -11,10 +11,24 @@ const state = {
     direction: 'normal',
     registrationDone: false,
     settingsChanged: false,
-    showAligned: true
+    targetView: 'auto',
+    manualTransform: {
+        offset: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        applyOffset: false,
+        applyRotation: false,
+        applyScale: false,
+        active: false,
+        userEdited: false
+    }
 };
 
 let sliceUpdateTimeout = null;
+function isTargetAligned() {
+    return state.targetView === 'auto';
+}
+
 function debouncedUpdateSlice(changedSide = null) {
     if (sliceUpdateTimeout) clearTimeout(sliceUpdateTimeout);
 
@@ -30,8 +44,8 @@ function debouncedUpdateSlice(changedSide = null) {
 }
 
 function syncSlices(changedSide) {
-    // Only sync sliders when showing aligned images
-    if (!state.showAligned) return;
+    // Only sync sliders when target view is auto-aligned.
+    if (!isTargetAligned()) return;
 
     if (changedSide === 'source') {
         // Source changed -> calculate corresponding target slice
@@ -83,10 +97,78 @@ function updateTargetSliderVisibility() {
     document.getElementById('target-slice-control').style.display = show ? 'flex' : 'none';
 }
 
-function updateAlignToggleVisibility() {
-    // Show toggle when both DICOMs are loaded and not in split mode
-    const show = state.source.slices > 0 && state.target.slices > 0 && state.mode !== 'split';
-    document.getElementById('align-toggle-control').style.display = show ? 'flex' : 'none';
+function updateTargetViewVisibility() {
+    // Show toggle when both DICOMs are loaded
+    const show = state.source.slices > 0 && state.target.slices > 0;
+    document.getElementById('target-view-control').style.display = show ? 'flex' : 'none';
+}
+
+function setTargetView(view) {
+    state.targetView = view;
+    document.querySelectorAll('[data-target-view]').forEach(b => {
+        b.classList.toggle('active', b.dataset.targetView === view);
+    });
+}
+
+function getComputedBaseline() {
+    const computed = state.computedTransform || {};
+    return {
+        offset: computed.offset || [0, 0, 0],
+        rotation: computed.rotation || { x: 0, y: 0, z: 0 },
+        scale: computed.scale || [1, 1, 1]
+    };
+}
+
+function resetManualTransformUI() {
+    state.manualTransform = {
+        offset: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        applyOffset: false,
+        applyRotation: false,
+        applyScale: false,
+        active: false,
+        userEdited: false
+    };
+
+    const checkboxIds = ['apply-offset', 'apply-rotation', 'apply-scale'];
+    checkboxIds.forEach(id => {
+        const checkbox = document.getElementById(id);
+        if (checkbox) checkbox.checked = false;
+    });
+
+    const defaults = {
+        'offset-x': 0, 'offset-y': 0, 'offset-z': 0,
+        'rotation-x': 0, 'rotation-y': 0, 'rotation-z': 0,
+        'scale-x': 1, 'scale-y': 1, 'scale-z': 1
+    };
+    Object.entries(defaults).forEach(([id, value]) => {
+        const input = document.getElementById(id);
+        if (input) input.value = value;
+    });
+
+    syncTransformInputs();
+}
+
+function seedManualInputsFromComputed() {
+    if (state.manualTransform.userEdited) return;
+    const baseline = getComputedBaseline();
+    const setValue = (id, value, decimals) => {
+        const input = document.getElementById(id);
+        if (!input) return;
+        const num = Number.isFinite(value) ? value : 0;
+        input.value = decimals === null ? num : num.toFixed(decimals);
+    };
+
+    setValue('offset-x', baseline.offset[0], 1);
+    setValue('offset-y', baseline.offset[1], 1);
+    setValue('offset-z', baseline.offset[2], 1);
+    setValue('rotation-x', baseline.rotation.x, 1);
+    setValue('rotation-y', baseline.rotation.y, 1);
+    setValue('rotation-z', baseline.rotation.z, 1);
+    setValue('scale-x', baseline.scale[0], 2);
+    setValue('scale-y', baseline.scale[1], 2);
+    setValue('scale-z', baseline.scale[2], 2);
 }
 
 const spatialViz = { rotX: -0.5, rotY: 0.5, isDragging: false, lastX: 0, lastY: 0, data: null };
@@ -132,6 +214,7 @@ async function loadDicom(side) {
         state[side].echos = data.echos || 1;
         state[side].currentEcho = 0;
         state[side].hasMask = false;
+        resetManualTransformUI();
 
         const slider = document.getElementById('slice-slider');
         if (state.source.slices > 0) {
@@ -171,7 +254,7 @@ async function loadDicom(side) {
         updateSpatialRelation();
         updateUI();
         updateTargetSliderVisibility();
-        updateAlignToggleVisibility();
+        updateTargetViewVisibility();
 
         // Auto-register if both DICOMs loaded and mask exists
         if (side === 'target' && state.source.slices > 0 && state.source.hasMask) {
@@ -311,11 +394,42 @@ async function loadTargetAligned() {
     });
 }
 
+function applyManualTransform() {
+    state.manualTransform.userEdited = true;
+    const mt = state.manualTransform;
+    mt.offset.x = parseFloat(document.getElementById('offset-x').value) || 0;
+    mt.offset.y = parseFloat(document.getElementById('offset-y').value) || 0;
+    mt.offset.z = parseFloat(document.getElementById('offset-z').value) || 0;
+    mt.rotation.x = parseFloat(document.getElementById('rotation-x').value) || 0;
+    mt.rotation.y = parseFloat(document.getElementById('rotation-y').value) || 0;
+    mt.rotation.z = parseFloat(document.getElementById('rotation-z').value) || 0;
+    mt.scale.x = parseFloat(document.getElementById('scale-x').value) || 1;
+    mt.scale.y = parseFloat(document.getElementById('scale-y').value) || 1;
+    mt.scale.z = parseFloat(document.getElementById('scale-z').value) || 1;
+    mt.applyOffset = document.getElementById('apply-offset').checked;
+    mt.applyRotation = document.getElementById('apply-rotation').checked;
+    mt.applyScale = document.getElementById('apply-scale').checked;
+    const eps = 1e-3;
+    const offsetActive = mt.applyOffset &&
+        (Math.abs(mt.offset.x) > eps || Math.abs(mt.offset.y) > eps || Math.abs(mt.offset.z) > eps);
+    const rotationActive = mt.applyRotation &&
+        (Math.abs(mt.rotation.x) > eps || Math.abs(mt.rotation.y) > eps || Math.abs(mt.rotation.z) > eps);
+    const scaleActive = mt.applyScale &&
+        (Math.abs(mt.scale.x - 1) > eps || Math.abs(mt.scale.y - 1) > eps || Math.abs(mt.scale.z - 1) > eps);
+    mt.active = offsetActive || rotationActive || scaleActive;
+
+    if (mt.active && state.targetView === 'auto') {
+        setTargetView('manual');
+    }
+
+    updateSlice();
+}
+
 async function loadTargetOriginal() {
     if (state.target.slices === 0) return null;
     let targetSliceIdx = state.targetSlice;
-    // Only sync with source when showing aligned (not original) and not in split mode
-    if (state.showAligned && state.mode !== 'split' && state.source.slices > 0) {
+    // Only sync with source when target view is auto-aligned and not in split mode.
+    if (isTargetAligned() && state.mode !== 'split' && state.source.slices > 0) {
         const physZ = state.source.origin[2] + state.currentSlice * state.source.spacing[2];
         targetSliceIdx = Math.round((physZ - state.target.origin[2]) / state.target.spacing[2]);
         targetSliceIdx = Math.max(0, Math.min(state.target.slices - 1, targetSliceIdx));
@@ -324,6 +438,40 @@ async function loadTargetOriginal() {
         targetSliceIdx = state.target.slices - 1 - targetSliceIdx;
     }
     const url = `/api/slice/target/${targetSliceIdx}?mask=${state.target.hasMask}&t=${Date.now()}`;
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = url;
+    });
+}
+
+async function loadTargetWithManualTransform() {
+    if (state.target.slices === 0) return null;
+    if (!state.manualTransform.active || state.targetView !== 'manual') return null;
+
+    const mt = state.manualTransform;
+    const reverse = state.direction === 'reverse';
+    const sliceIndex = state.targetSlice;
+    const params = new URLSearchParams({
+        mask: state.target.hasMask,
+        offset_x: mt.offset.x,
+        offset_y: mt.offset.y,
+        offset_z: mt.offset.z,
+        rotation_x: mt.rotation.x,
+        rotation_y: mt.rotation.y,
+        rotation_z: mt.rotation.z,
+        scale_x: mt.scale.x,
+        scale_y: mt.scale.y,
+        scale_z: mt.scale.z,
+        apply_offset: mt.applyOffset,
+        apply_rotation: mt.applyRotation,
+        apply_scale: mt.applyScale,
+        output: 'target',
+        reverse,
+        t: Date.now()
+    });
+    const url = `/api/transform/${sliceIndex}?${params}`;
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => resolve(img);
@@ -343,9 +491,14 @@ async function updateSliceSingle(side) {
             document.getElementById('target-slice-slider-info').textContent =
                 `${state.targetSlice + 1} / ${state.target.slices}`;
         }
-        const [aligned, original] = await Promise.all([loadTargetAligned(), loadTargetOriginal()]);
+        const [aligned, original, manual] = await Promise.all([
+            loadTargetAligned(),
+            loadTargetOriginal(),
+            loadTargetWithManualTransform()
+        ]);
         state.target.imageData = aligned || original;
         state.target.originalImageData = original;
+        state.target.manualTransformData = manual;
     }
     document.getElementById('viewer-placeholder').classList.toggle('hidden',
         state.source.imageData || state.target.imageData);
@@ -361,15 +514,17 @@ async function updateSlice() {
             `${state.targetSlice + 1} / ${state.target.slices}`;
     }
 
-    const [sourceImg, targetAligned, targetOriginal] = await Promise.all([
+    const [sourceImg, targetAligned, targetOriginal, targetManual] = await Promise.all([
         loadSourceImage(),
         loadTargetAligned(),
-        loadTargetOriginal()
+        loadTargetOriginal(),
+        loadTargetWithManualTransform()
     ]);
 
     state.source.imageData = sourceImg;
     state.target.imageData = targetAligned || targetOriginal;
     state.target.originalImageData = targetOriginal;
+    state.target.manualTransformData = targetManual;
 
     document.getElementById('viewer-placeholder').classList.toggle('hidden', sourceImg || targetAligned || targetOriginal);
     renderViewer();
@@ -382,10 +537,18 @@ function renderViewer() {
     const curtain = document.getElementById('curtain');
 
     const sourceImg = state.source.imageData;
-    // Use original or aligned based on toggle (split mode always uses original)
-    const targetImg = (state.mode === 'split' || !state.showAligned)
-        ? state.target.originalImageData
-        : state.target.imageData;
+    // Determine which target image to use:
+    // - Manual view: use transformed (fallback to original)
+    // - Auto view: use auto-aligned
+    // - Original view: use original (native grid)
+    let targetImg;
+    if (state.targetView === 'manual') {
+        targetImg = state.target.manualTransformData || state.target.originalImageData;
+    } else if (state.targetView === 'auto') {
+        targetImg = state.target.imageData;
+    } else {
+        targetImg = state.target.originalImageData;
+    }
 
     if (!sourceImg && !targetImg) return;
 
@@ -429,13 +592,14 @@ function renderViewer() {
     sourceCanvas.style.position = 'absolute';
     targetCanvas.style.position = 'absolute';
 
-    const img = sourceImg || targetImg;
-    const baseW = img.width;
-    const baseH = img.height;
-    const scale = Math.min(containerW / baseW, containerH / baseH) * state.zoom;
+    const baseImg = state.mode === 'target' ? (targetImg || sourceImg) : (sourceImg || targetImg);
+    if (!baseImg) return;
+    const baseW = baseImg.width;
+    const baseH = baseImg.height;
+    const displayScale = Math.min(containerW / baseW, containerH / baseH) * state.zoom;
 
-    const w = Math.floor(baseW * scale);
-    const h = Math.floor(baseH * scale);
+    const w = Math.floor(baseW * displayScale);
+    const h = Math.floor(baseH * displayScale);
 
     [sourceCanvas, targetCanvas].forEach(canvas => {
         canvas.style.display = 'block';
@@ -452,7 +616,32 @@ function renderViewer() {
     targetCtx.clearRect(0, 0, w, h);
 
     if (sourceImg) sourceCtx.drawImage(sourceImg, 0, 0, w, h);
-    if (targetImg) targetCtx.drawImage(targetImg, 0, 0, w, h);
+    if (targetImg) {
+        const showOriginalOverlay = (state.targetView === 'original' ||
+            (state.targetView === 'manual' && !state.manualTransform.active)) &&
+            sourceImg &&
+            state.mode !== 'target';
+        if (showOriginalOverlay) {
+            // Map target into source pixel space using origin/spacing (approx, no rotation).
+            const sourceSpacingX = state.source.spacing[0] || 1;
+            const sourceSpacingY = state.source.spacing[1] || 1;
+            const targetSpacingX = state.target.spacing[0] || 1;
+            const targetSpacingY = state.target.spacing[1] || 1;
+            const offsetX = ((state.target.origin[0] || 0) - (state.source.origin[0] || 0)) / sourceSpacingX;
+            const offsetY = ((state.target.origin[1] || 0) - (state.source.origin[1] || 0)) / sourceSpacingY;
+            const scaleX = (targetSpacingX / sourceSpacingX) * displayScale;
+            const scaleY = (targetSpacingY / sourceSpacingY) * displayScale;
+            targetCtx.drawImage(
+                targetImg,
+                Math.floor(offsetX * displayScale),
+                Math.floor(offsetY * displayScale),
+                Math.floor(targetImg.width * scaleX),
+                Math.floor(targetImg.height * scaleY)
+            );
+        } else {
+            targetCtx.drawImage(targetImg, 0, 0, w, h);
+        }
+    }
 
     if (state.mode === 'curtain') {
         curtain.style.display = 'block';
@@ -547,6 +736,7 @@ async function browse(inputId, mode) {
 async function updateSpatialRelation() {
     if (state.source.slices === 0 || state.target.slices === 0) {
         document.getElementById('spatial-section').style.display = 'none';
+        document.getElementById('transform-section').style.display = 'none';
         return;
     }
 
@@ -555,6 +745,7 @@ async function updateSpatialRelation() {
         const data = await res.json();
 
         document.getElementById('spatial-section').style.display = 'block';
+        document.getElementById('transform-section').style.display = 'block';
 
         const status = document.getElementById('spatial-status');
         if (data.error) { status.textContent = 'No Overlap'; status.className = 'error'; }
@@ -564,8 +755,33 @@ async function updateSpatialRelation() {
         document.getElementById('overlap-pct').textContent = `${Math.min(data.overlap_pct_source, data.overlap_pct_target)}%`;
         document.getElementById('offset-mm').textContent = `${data.offset_mm.map(v => v.toFixed(1)).join('/')}`;
 
+        // Store and display computed values for reference
+        state.computedTransform = {
+            offset: data.offset_mm,
+            rotation: data.rotation_deg,
+            scale: data.spacing_ratio
+        };
+
+        // Show computed values as info
+        document.getElementById('computed-offset').textContent =
+            `Offset ${data.offset_mm.map(v => v.toFixed(1)).join('/')}`;
+        if (data.rotation_deg) {
+            document.getElementById('computed-rotation').textContent =
+                `Rot ${data.rotation_deg.x.toFixed(1)}/${data.rotation_deg.y.toFixed(1)}/${data.rotation_deg.z.toFixed(1)}`;
+        }
+        if (data.spacing_ratio) {
+            document.getElementById('computed-scale').textContent =
+                `Scale ${data.spacing_ratio.map(v => v.toFixed(2)).join('/')}`;
+        }
+
+        seedManualInputsFromComputed();
+
         spatialViz.data = data;
         renderSpatialViz();
+
+        if (state.targetView === 'auto') {
+            updateSlice();
+        }
 
     } catch (e) {}
 }
@@ -665,14 +881,14 @@ document.getElementById('target-slice-slider').addEventListener('input', (e) => 
 
 document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-        if (!btn.dataset.mode) return; // Skip align toggle buttons
+        if (!btn.dataset.mode) return; // Skip target view toggle buttons
         document.querySelectorAll('.mode-btn[data-mode]').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         state.mode = btn.dataset.mode;
         document.querySelector('.blend-control').style.display = state.mode === 'blend' ? 'flex' : 'none';
         document.getElementById('dir-toggle').style.display = state.mode === 'curtain' ? 'flex' : 'none';
         updateTargetSliderVisibility();
-        updateAlignToggleVisibility();
+        updateTargetViewVisibility();
         updateSlice();
     });
 });
@@ -692,12 +908,10 @@ document.querySelectorAll('.dir-btn').forEach(btn => {
     });
 });
 
-document.querySelectorAll('[data-align]').forEach(btn => {
+document.querySelectorAll('[data-target-view]').forEach(btn => {
     btn.addEventListener('click', () => {
-        document.querySelectorAll('[data-align]').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        state.showAligned = btn.dataset.align === 'aligned';
-        renderViewer();
+        setTargetView(btn.dataset.targetView);
+        updateSlice();
     });
 });
 
@@ -755,3 +969,57 @@ window.addEventListener('mouseup', () => spatialViz.isDragging = false);
 
 // Resize
 window.addEventListener('resize', renderViewer);
+
+// Transform controls - live update
+const transformGroups = [
+    { checkboxId: 'apply-offset', inputs: ['offset-x', 'offset-y', 'offset-z'] },
+    { checkboxId: 'apply-rotation', inputs: ['rotation-x', 'rotation-y', 'rotation-z'] },
+    { checkboxId: 'apply-scale', inputs: ['scale-x', 'scale-y', 'scale-z'] }
+];
+
+function syncTransformInputs() {
+    transformGroups.forEach(group => {
+        const enabled = document.getElementById(group.checkboxId).checked;
+        group.inputs.forEach(id => {
+            const input = document.getElementById(id);
+            input.disabled = !enabled;
+            const field = input.closest('.transform-field');
+            if (field) field.classList.toggle('disabled', !enabled);
+        });
+    });
+}
+
+let transformDebounce = null;
+function debouncedTransformUpdate() {
+    if (transformDebounce) clearTimeout(transformDebounce);
+    transformDebounce = setTimeout(applyManualTransform, 150);
+}
+
+['apply-offset', 'apply-rotation', 'apply-scale'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => {
+        syncTransformInputs();
+        applyManualTransform();
+    });
+});
+
+const transformValueInputs = [
+    'offset-x', 'offset-y', 'offset-z',
+    'rotation-x', 'rotation-y', 'rotation-z',
+    'scale-x', 'scale-y', 'scale-z'
+];
+
+function handleTransformValueChange() {
+    if (document.getElementById('apply-offset').checked ||
+        document.getElementById('apply-rotation').checked ||
+        document.getElementById('apply-scale').checked) {
+        debouncedTransformUpdate();
+    }
+}
+
+transformValueInputs.forEach(id => {
+    const input = document.getElementById(id);
+    input.addEventListener('input', handleTransformValueChange);
+    input.addEventListener('change', handleTransformValueChange);
+});
+
+syncTransformInputs();

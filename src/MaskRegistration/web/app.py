@@ -285,7 +285,10 @@ def get_aligned_slice(index: int, mask: bool = False, reverse: bool = False, t: 
 
     mask_vol = None
     if mask and store.target_mask is not None:
-        mask_img = sitk.GetImageFromArray(store.target_mask.astype(np.float32))
+        mask_data = store.target_mask
+        if reverse:
+            mask_data = mask_data[::-1, :, :]
+        mask_img = sitk.GetImageFromArray(mask_data.astype(np.float32))
         mask_meta = store.target_mask_meta if store.target_mask_meta else target_meta
         mask_img.SetOrigin(mask_meta.origin)
         mask_img.SetSpacing(mask_meta.spacing)
@@ -331,10 +334,158 @@ def get_slice(side: Literal["source", "target"], index: int, mask: bool = False,
     return Response(content=png, media_type="image/png")
 
 
+@app.get("/api/transform/{index}")
+def get_transformed_slice(
+    index: int,
+    mask: str = "false",
+    offset_x: float = 0, offset_y: float = 0, offset_z: float = 0,
+    rotation_x: float = 0, rotation_y: float = 0, rotation_z: float = 0,
+    scale_x: float = 1, scale_y: float = 1, scale_z: float = 1,
+    apply_offset: str = "false", apply_rotation: str = "false", apply_scale: str = "false",
+    reverse: str = "false",
+    output: Literal["source", "target"] = "source",
+    t: str = None
+):
+    # Parse string booleans
+    mask = mask.lower() == "true"
+    apply_offset = apply_offset.lower() == "true"
+    apply_rotation = apply_rotation.lower() == "true"
+    apply_scale = apply_scale.lower() == "true"
+    reverse = reverse.lower() == "true"
+
+    source_dicom = store.get_dicom("source")
+    target_dicom = store.get_dicom("target")
+    source_meta = store.get_meta("source")
+    target_meta = store.get_meta("target")
+
+    if source_dicom is None or target_dicom is None:
+        raise HTTPException(400, "Both DICOMs must be loaded")
+
+    if output == "source":
+        if index < 0 or index >= source_dicom.shape[0]:
+            raise HTTPException(400, f"Invalid slice index: {index}")
+    else:
+        if index < 0 or index >= target_dicom.shape[0]:
+            raise HTTPException(400, f"Invalid slice index: {index}")
+
+    target_data = target_dicom
+    if reverse:
+        target_data = target_data[::-1, :, :]
+
+    # Build transform around the target image center for intuitive rotations.
+    transform = sitk.Euler3DTransform()
+    transform.SetCenter(physical_center(target_meta))
+
+    # Apply rotation (convert degrees to radians)
+    if apply_rotation:
+        transform.SetRotation(
+            np.radians(rotation_x),
+            np.radians(rotation_y),
+            np.radians(rotation_z)
+        )
+
+    # Apply offset
+    if apply_offset:
+        transform.SetTranslation((offset_x, offset_y, offset_z))
+
+    # Create target image
+    target_img = sitk.GetImageFromArray(target_data.astype(np.float32))
+    target_img.SetOrigin(target_meta.origin)
+    target_img.SetSpacing(target_meta.spacing)
+    target_img.SetDirection(target_meta.direction)
+
+    output_meta = source_meta if output == "source" else target_meta
+    # Apply scale by modifying output spacing
+    output_spacing = list(output_meta.spacing)
+    if apply_scale:
+        output_spacing = [
+            output_meta.spacing[0] / scale_x if scale_x != 0 else output_meta.spacing[0],
+            output_meta.spacing[1] / scale_y if scale_y != 0 else output_meta.spacing[1],
+            output_meta.spacing[2] / scale_z if scale_z != 0 else output_meta.spacing[2],
+        ]
+
+    # Resample with transform
+    resampler = sitk.ResampleImageFilter()
+    resampler.SetSize([output_meta.size[0], output_meta.size[1], output_meta.size[2]])
+    resampler.SetOutputOrigin(output_meta.origin)
+    resampler.SetOutputSpacing(output_spacing)
+    resampler.SetOutputDirection(output_meta.direction)
+    resampler.SetInterpolator(sitk.sitkLinear)
+    resampler.SetDefaultPixelValue(0)
+    resampler.SetTransform(transform)
+
+    aligned = resampler.Execute(target_img)
+    aligned_arr = sitk.GetArrayFromImage(aligned)
+
+    # Handle mask if requested
+    mask_vol = None
+    if mask and store.target_mask is not None:
+        mask_data = store.target_mask
+        if reverse:
+            mask_data = mask_data[::-1, :, :]
+        mask_img = sitk.GetImageFromArray(mask_data.astype(np.float32))
+        mask_meta = store.target_mask_meta if store.target_mask_meta else target_meta
+        mask_img.SetOrigin(mask_meta.origin)
+        mask_img.SetSpacing(mask_meta.spacing)
+        mask_img.SetDirection(mask_meta.direction)
+
+        mask_resampler = sitk.ResampleImageFilter()
+        mask_resampler.SetSize([output_meta.size[0], output_meta.size[1], output_meta.size[2]])
+        mask_resampler.SetOutputOrigin(output_meta.origin)
+        mask_resampler.SetOutputSpacing(output_spacing)
+        mask_resampler.SetOutputDirection(output_meta.direction)
+        mask_resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+        mask_resampler.SetDefaultPixelValue(0)
+        mask_resampler.SetTransform(transform)
+
+        aligned_mask = mask_resampler.Execute(mask_img)
+        mask_vol = sitk.GetArrayFromImage(aligned_mask).astype(np.uint8)
+
+    if mask_vol is not None:
+        png = slice_with_mask_to_png(aligned_arr, mask_vol, index)
+    else:
+        png = slice_to_png(aligned_arr, index)
+
+    return Response(content=png, media_type="image/png")
+
+
 @app.post("/api/output")
 def set_output(req: PathRequest):
     store.output_path = req.path
     return {"path": req.path}
+
+
+def direction_to_rotation(direction: tuple) -> dict:
+    """Extract rotation angles from direction cosine matrix."""
+    d = np.array(direction).reshape(3, 3)
+    # Extract Euler angles (XYZ convention) from rotation matrix
+    # Clamp values to avoid numerical issues with asin
+    sy = np.sqrt(d[0, 0]**2 + d[1, 0]**2)
+    singular = sy < 1e-6
+
+    if not singular:
+        x = np.arctan2(d[2, 1], d[2, 2])
+        y = np.arctan2(-d[2, 0], sy)
+        z = np.arctan2(d[1, 0], d[0, 0])
+    else:
+        x = np.arctan2(-d[1, 2], d[1, 1])
+        y = np.arctan2(-d[2, 0], sy)
+        z = 0
+
+    return {
+        "x": round(np.degrees(x), 2),
+        "y": round(np.degrees(y), 2),
+        "z": round(np.degrees(z), 2)
+    }
+
+
+def physical_center(meta: ImageMeta) -> tuple[float, float, float]:
+    direction = np.array(meta.direction, dtype=float).reshape(3, 3)
+    spacing = np.array(meta.spacing, dtype=float)
+    size = np.array(meta.size, dtype=float)
+    index_center = (size - 1) / 2.0
+    center = np.array(meta.origin, dtype=float) + direction @ (spacing * index_center)
+    return tuple(center.tolist())
 
 
 @app.get("/api/spatial-relation")
@@ -372,6 +523,21 @@ def get_spatial_relation():
 
     offset = [target_bounds["min"][i] - source_bounds["min"][i] for i in range(3)]
 
+    # Calculate rotation from direction matrices
+    source_rot = direction_to_rotation(sm.direction)
+    target_rot = direction_to_rotation(tm.direction)
+    rotation_diff = {
+        "x": round(target_rot["x"] - source_rot["x"], 2),
+        "y": round(target_rot["y"] - source_rot["y"], 2),
+        "z": round(target_rot["z"] - source_rot["z"], 2)
+    }
+
+    # Spacing ratio (target / source)
+    spacing_ratio = [
+        round(tm.spacing[i] / sm.spacing[i], 3) if sm.spacing[i] > 0 else 1
+        for i in range(3)
+    ]
+
     return {
         "source": source_bounds,
         "target": target_bounds,
@@ -380,6 +546,10 @@ def get_spatial_relation():
         "overlap_pct_source": round(overlap_pct_source, 1),
         "overlap_pct_target": round(overlap_pct_target, 1),
         "offset_mm": offset,
+        "rotation_deg": rotation_diff,
+        "spacing_ratio": spacing_ratio,
+        "source_rotation": source_rot,
+        "target_rotation": target_rot,
         "warning": overlap_pct_source < 50 or overlap_pct_target < 50,
         "error": overlap_vol == 0
     }

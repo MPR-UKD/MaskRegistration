@@ -56,6 +56,87 @@
                 <div id="spatial-status"></div>
             </div>
 
+            <div class="section" id="transform-section" style="display: none;">
+                <div class="section-title">Transform</div>
+                <div class="transform-info">
+                    <span>Computed (Auto values): </span>
+                    <span id="computed-offset">Offset -</span>
+                    <span id="computed-rotation">Rot -</span>
+                    <span id="computed-scale">Scale -</span>
+                </div>
+                <div class="transform-grid">
+                    <div class="transform-group">
+                        <div class="transform-header">
+                            <input type="checkbox" id="apply-offset" class="transform-checkbox">
+                            <label for="apply-offset" class="transform-label">Offset</label>
+                        </div>
+                        <div class="transform-values">
+                            <div class="transform-field">
+                                <span class="axis">X</span>
+                                <input type="number" step="0.1" class="value" id="offset-x" value="0">
+                                <span class="unit">mm</span>
+                            </div>
+                            <div class="transform-field">
+                                <span class="axis">Y</span>
+                                <input type="number" step="0.1" class="value" id="offset-y" value="0">
+                                <span class="unit">mm</span>
+                            </div>
+                            <div class="transform-field">
+                                <span class="axis">Z</span>
+                                <input type="number" step="0.1" class="value" id="offset-z" value="0">
+                                <span class="unit">mm</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="transform-group">
+                        <div class="transform-header">
+                            <input type="checkbox" id="apply-rotation" class="transform-checkbox">
+                            <label for="apply-rotation" class="transform-label">Rotation</label>
+                        </div>
+                        <div class="transform-values">
+                            <div class="transform-field">
+                                <span class="axis">X</span>
+                                <input type="number" step="0.1" class="value" id="rotation-x" value="0">
+                                <span class="unit">deg</span>
+                            </div>
+                            <div class="transform-field">
+                                <span class="axis">Y</span>
+                                <input type="number" step="0.1" class="value" id="rotation-y" value="0">
+                                <span class="unit">deg</span>
+                            </div>
+                            <div class="transform-field">
+                                <span class="axis">Z</span>
+                                <input type="number" step="0.1" class="value" id="rotation-z" value="0">
+                                <span class="unit">deg</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="transform-group">
+                        <div class="transform-header">
+                            <input type="checkbox" id="apply-scale" class="transform-checkbox">
+                            <label for="apply-scale" class="transform-label">Scale</label>
+                        </div>
+                        <div class="transform-values">
+                            <div class="transform-field">
+                                <span class="axis">X</span>
+                                <input type="number" step="0.01" class="value" id="scale-x" value="1">
+                                <span class="unit">x</span>
+                            </div>
+                            <div class="transform-field">
+                                <span class="axis">Y</span>
+                                <input type="number" step="0.01" class="value" id="scale-y" value="1">
+                                <span class="unit">x</span>
+                            </div>
+                            <div class="transform-field">
+                                <span class="axis">Z</span>
+                                <input type="number" step="0.01" class="value" id="scale-z" value="1">
+                                <span class="unit">x</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="section" id="settings-section">
                 <div class="section-title">Settings</div>
                 <div class="option-row">
@@ -130,10 +211,12 @@
                     <input type="range" id="blend-slider" min="0" max="100" value="50">
                     <span id="blend-info">50%</span>
                 </div>
-                <div class="control-group" id="align-toggle-control" style="display: none;">
+                <div class="control-group" id="target-view-control" style="display: none;">
+                    <label>Target View</label>
                     <div class="mode-toggle">
-                        <button class="mode-btn active" data-align="aligned">Aligned</button>
-                        <button class="mode-btn" data-align="original">Original</button>
+                        <button class="mode-btn active" data-target-view="auto">Auto</button>
+                        <button class="mode-btn" data-target-view="manual">Manual</button>
+                        <button class="mode-btn" data-target-view="original">Original</button>
                     </div>
                 </div>
             </div>
