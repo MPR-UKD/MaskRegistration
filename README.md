@@ -30,12 +30,26 @@ The web interface provides an interactive viewer for comparing source and target
 uv run maskregistration-web
 ```
 
-Opens browser at `http://localhost:8000` with:
-- Dual viewer with Curtain/Blend/Split modes
-- Aligned vs Original comparison toggle
-- Synchronized slice navigation
-- Auto-detection of slice direction
-- Export registered mask
+Opens browser at `http://localhost:8000`.
+
+![Demo](docs/demo.gif)
+
+### UI Layout
+
+| Area | Description |
+|------|-------------|
+| **Left Sidebar** | Load Source/Target DICOM, view spatial overlap, settings, export |
+| **Viewer** | Curtain comparison with drag handle, slice navigation, zoom |
+| **Right Panel** | Optional manual transform (Offset, Rotation, Scale) |
+
+### Workflow
+
+1. Load source DICOM and mask
+2. Load target DICOM
+3. Registration runs automatically
+4. Use curtain to compare alignment
+5. Optionally adjust with manual transforms
+6. Export registered mask
 
 ## Command Line Interface
 

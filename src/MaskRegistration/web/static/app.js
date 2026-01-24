@@ -588,7 +588,7 @@ async function loadTargetOriginal() {
 
 async function loadTargetWithManualTransform() {
     if (state.target.slices === 0) return null;
-    if (!state.manualTransform.active || state.targetView !== 'manual') return null;
+    if (state.targetView !== 'manual') return null;
 
     const mt = state.manualTransform;
     const reverse = state.direction === 'reverse';
@@ -962,8 +962,6 @@ async function updateSpatialRelation() {
             document.getElementById('computed-scale').textContent =
                 `Scale ${data.spacing_ratio.map(v => v.toFixed(2)).join('/')}`;
         }
-
-        seedManualInputsFromComputed();
 
         spatialViz.data = data;
         renderSpatialViz();
