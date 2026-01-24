@@ -63,6 +63,18 @@ body {
     overflow-y: auto;
 }
 
+.sidebar-right {
+    width: 280px;
+    min-width: 280px;
+    background: var(--surface);
+    border-left: 1px solid var(--border-subtle);
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    overflow-y: auto;
+}
+
 .logo {
     font-size: 14px;
     font-weight: 600;
@@ -787,4 +799,28 @@ body {
 .btn-apply:disabled {
     opacity: 0.3;
     cursor: not-allowed;
+}
+
+.btn-transform-toggle {
+    padding: 7px 14px;
+    background: var(--surface-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    margin-left: auto;
+    transition: all var(--transition);
+}
+
+.btn-transform-toggle:hover {
+    background: var(--border);
+    color: var(--text);
+}
+
+.btn-transform-toggle.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
 }

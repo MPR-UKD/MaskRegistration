@@ -109,8 +109,16 @@ function changeSlice(side, delta) {
 }
 
 function updateTargetSliderVisibility() {
-    const show = state.target.slices > 0 && (state.mode === 'curtain' || state.mode === 'split' || state.mode === 'blend');
+    const show = state.target.slices > 0;
     document.getElementById('target-slice-control').style.display = show ? 'flex' : 'none';
+}
+
+function toggleTransformPanel() {
+    const panel = document.getElementById('transform-panel');
+    const btn = document.getElementById('transform-toggle');
+    const isVisible = panel.style.display !== 'none';
+    panel.style.display = isVisible ? 'none' : 'flex';
+    btn.classList.toggle('active', !isVisible);
 }
 
 function updateTargetViewVisibility() {
@@ -917,7 +925,7 @@ async function browse(inputId, mode) {
 async function updateSpatialRelation() {
     if (state.source.slices === 0 || state.target.slices === 0) {
         document.getElementById('spatial-section').style.display = 'none';
-        document.getElementById('transform-section').style.display = 'none';
+        document.getElementById('transform-toggle').style.display = 'none';
         return;
     }
 
@@ -926,7 +934,7 @@ async function updateSpatialRelation() {
         const data = await res.json();
 
         document.getElementById('spatial-section').style.display = 'block';
-        document.getElementById('transform-section').style.display = 'block';
+        document.getElementById('transform-toggle').style.display = 'block';
 
         const status = document.getElementById('spatial-status');
         if (data.error) { status.textContent = 'No Overlap'; status.className = 'error'; }
@@ -1047,31 +1055,11 @@ document.getElementById('zoom-slider').addEventListener('input', (e) => {
     renderViewer();
 });
 
-document.getElementById('blend-slider').addEventListener('input', (e) => {
-    state.blend = parseInt(e.target.value) / 100;
-    document.getElementById('blend-info').textContent = `${e.target.value}%`;
-    renderViewer();
-});
-
 document.getElementById('target-slice-slider').addEventListener('input', (e) => {
     state.targetSlice = parseInt(e.target.value);
     document.getElementById('target-slice-slider-info').textContent = `${state.targetSlice + 1} / ${state.target.slices}`;
     syncSlices('target');
     debouncedUpdateSlice('target');
-});
-
-document.querySelectorAll('.mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        if (!btn.dataset.mode) return; // Skip target view toggle buttons
-        document.querySelectorAll('.mode-btn[data-mode]').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        state.mode = btn.dataset.mode;
-        document.querySelector('.blend-control').style.display = state.mode === 'blend' ? 'flex' : 'none';
-        document.getElementById('dir-toggle').style.display = state.mode === 'curtain' ? 'flex' : 'none';
-        updateTargetSliderVisibility();
-        updateTargetViewVisibility();
-        updateSlice();
-    });
 });
 
 document.querySelectorAll('.dir-btn').forEach(btn => {

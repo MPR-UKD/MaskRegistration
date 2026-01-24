@@ -69,10 +69,91 @@
                 <div id="spatial-status"></div>
             </div>
 
-            <div class="section" id="transform-section" style="display: none;">
+            <div class="section" id="settings-section">
+                <div class="section-title">Settings</div>
+                <div class="option-row">
+                    <label>Direction</label>
+                    <select id="reverse-select">
+                        <option value="auto">Auto</option>
+                        <option value="normal">Normal</option>
+                        <option value="reverse">Reverse</option>
+                    </select>
+                </div>
+                <div class="option-row">
+                    <label>Subpixel</label>
+                    <input type="number" id="subpixel-input" min="1" max="20" value="1">
+                </div>
+                <button class="btn-run" id="run-button" onclick="runRegistration()" style="display: none;">Re-Register</button>
+            </div>
+
+            <div class="section" id="export-section" style="display: none;">
+                <div class="section-title">Export</div>
+                <button class="btn-export" id="export-button" onclick="exportMask()">Export Mask</button>
+            </div>
+
+            <div class="section" id="reset-section">
+                <div class="section-title">Session</div>
+                <button class="btn-reset" id="reset-button" onclick="resetAll()">Reset All</button>
+            </div>
+
+            <div id="status-bar"></div>
+        </aside>
+
+        <main class="viewer-area">
+            <div class="viewer-container" id="viewer-container">
+                <canvas id="source-canvas" class="viewer-canvas"></canvas>
+                <canvas id="target-canvas" class="viewer-canvas"></canvas>
+                <div class="curtain horizontal" id="curtain">
+                    <div class="curtain-line"></div>
+                    <div class="curtain-handle" id="curtain-handle">↔</div>
+                </div>
+                <div class="viewer-placeholder" id="viewer-placeholder">Load DICOM to start</div>
+            </div>
+
+            <div class="viewer-controls">
+                <div class="control-group">
+                    <label>Curtain</label>
+                    <div class="dir-toggle" id="dir-toggle">
+                        <button class="dir-btn active" data-dir="horizontal" title="Left/Right">↔</button>
+                        <button class="dir-btn" data-dir="vertical" title="Top/Bottom">↕</button>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label>Source</label>
+                    <button class="slice-btn" onclick="changeSlice('source', -1)">&lt;</button>
+                    <input type="range" id="slice-slider" min="0" max="0" value="0" disabled>
+                    <button class="slice-btn" onclick="changeSlice('source', 1)">&gt;</button>
+                    <span id="slice-info">0 / 0</span>
+                </div>
+                <div class="control-group" id="target-slice-control" style="display: none;">
+                    <label>Target</label>
+                    <button class="slice-btn" onclick="changeSlice('target', -1)">&lt;</button>
+                    <input type="range" id="target-slice-slider" min="0" max="0" value="0" disabled>
+                    <button class="slice-btn" onclick="changeSlice('target', 1)">&gt;</button>
+                    <span id="target-slice-slider-info">0 / 0</span>
+                </div>
+                <div class="control-group">
+                    <label>Zoom</label>
+                    <input type="range" id="zoom-slider" min="50" max="400" value="100">
+                    <span id="zoom-info">100%</span>
+                </div>
+                <div class="control-group" id="target-view-control" style="display: none;">
+                    <label>Target View</label>
+                    <div class="mode-toggle">
+                        <button class="mode-btn active" data-target-view="auto">Auto</button>
+                        <button class="mode-btn" data-target-view="manual">Manual</button>
+                        <button class="mode-btn" data-target-view="original">Original</button>
+                    </div>
+                </div>
+                <button class="btn-transform-toggle" id="transform-toggle" style="display: none;" onclick="toggleTransformPanel()">Transform</button>
+            </div>
+        </main>
+
+        <aside class="sidebar-right" id="transform-panel" style="display: none;">
+            <div class="section">
                 <div class="section-title">Transform</div>
                 <div class="transform-info">
-                    <span>Computed (Auto values): </span>
+                    <span>Computed: </span>
                     <span id="computed-offset">Offset -</span>
                     <span id="computed-rotation">Rot -</span>
                     <span id="computed-scale">Scale -</span>
@@ -149,96 +230,7 @@
                     </div>
                 </div>
             </div>
-
-            <div class="section" id="settings-section">
-                <div class="section-title">Settings</div>
-                <div class="option-row">
-                    <label>Direction</label>
-                    <select id="reverse-select">
-                        <option value="auto">Auto</option>
-                        <option value="normal">Normal</option>
-                        <option value="reverse">Reverse</option>
-                    </select>
-                </div>
-                <div class="option-row">
-                    <label>Subpixel</label>
-                    <input type="number" id="subpixel-input" min="1" max="20" value="1">
-                </div>
-                <button class="btn-run" id="run-button" onclick="runRegistration()" style="display: none;">Re-Register</button>
-            </div>
-
-            <div class="section" id="export-section" style="display: none;">
-                <div class="section-title">Export</div>
-                <button class="btn-export" id="export-button" onclick="exportMask()">Export Mask</button>
-            </div>
-
-            <div class="section" id="reset-section">
-                <div class="section-title">Session</div>
-                <button class="btn-reset" id="reset-button" onclick="resetAll()">Reset All</button>
-            </div>
-
-            <div id="status-bar"></div>
         </aside>
-
-        <main class="viewer-area">
-            <div class="viewer-container" id="viewer-container">
-                <canvas id="source-canvas" class="viewer-canvas"></canvas>
-                <canvas id="target-canvas" class="viewer-canvas"></canvas>
-                <div class="curtain horizontal" id="curtain">
-                    <div class="curtain-line"></div>
-                    <div class="curtain-handle" id="curtain-handle">↔</div>
-                </div>
-                <div class="viewer-placeholder" id="viewer-placeholder">Load DICOM to start</div>
-            </div>
-
-            <div class="viewer-controls">
-                <div class="control-group">
-                    <div class="mode-toggle">
-                        <button class="mode-btn active" data-mode="curtain">Curtain</button>
-                        <button class="mode-btn" data-mode="blend">Blend</button>
-                        <button class="mode-btn" data-mode="split">Split</button>
-                        <button class="mode-btn" data-mode="source">Source</button>
-                        <button class="mode-btn" data-mode="target">Target</button>
-                    </div>
-                    <div class="dir-toggle" id="dir-toggle">
-                        <button class="dir-btn active" data-dir="horizontal" title="Left/Right">↔</button>
-                        <button class="dir-btn" data-dir="vertical" title="Top/Bottom">↕</button>
-                    </div>
-                </div>
-                <div class="control-group">
-                    <label>Source</label>
-                    <button class="slice-btn" onclick="changeSlice('source', -1)">&lt;</button>
-                    <input type="range" id="slice-slider" min="0" max="0" value="0" disabled>
-                    <button class="slice-btn" onclick="changeSlice('source', 1)">&gt;</button>
-                    <span id="slice-info">0 / 0</span>
-                </div>
-                <div class="control-group dual-slice-control" id="target-slice-control" style="display: none;">
-                    <label>Target</label>
-                    <button class="slice-btn" onclick="changeSlice('target', -1)">&lt;</button>
-                    <input type="range" id="target-slice-slider" min="0" max="0" value="0" disabled>
-                    <button class="slice-btn" onclick="changeSlice('target', 1)">&gt;</button>
-                    <span id="target-slice-slider-info">0 / 0</span>
-                </div>
-                <div class="control-group">
-                    <label>Zoom</label>
-                    <input type="range" id="zoom-slider" min="50" max="400" value="100">
-                    <span id="zoom-info">100%</span>
-                </div>
-                <div class="control-group blend-control" style="display: none;">
-                    <label>Blend</label>
-                    <input type="range" id="blend-slider" min="0" max="100" value="50">
-                    <span id="blend-info">50%</span>
-                </div>
-                <div class="control-group" id="target-view-control" style="display: none;">
-                    <label>Target View</label>
-                    <div class="mode-toggle">
-                        <button class="mode-btn active" data-target-view="auto">Auto</button>
-                        <button class="mode-btn" data-target-view="manual">Manual</button>
-                        <button class="mode-btn" data-target-view="original">Original</button>
-                    </div>
-                </div>
-            </div>
-        </main>
     </div>
 
     <script src="/static/app.js"></script>
