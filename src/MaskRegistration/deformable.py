@@ -1,21 +1,18 @@
 """Deformable (non-rigid) image registration.
 
-When two scans show the same anatomy but the patient moved between
-them (or the deformation is not just a rigid shift), a pure affine
-resample of the mask gives the wrong overlap. This module fits a dense
-displacement vector field that aligns the source image onto the target
-image at the voxel level, then warps the mask through that field.
+When two scans show the same anatomy but the patient moved between them
+(e.g. between two MRI visits on consecutive days), a pure affine resample
+puts the mask in the wrong place. This module fits a dense displacement
+vector field that aligns the source onto the target at the voxel level,
+then warps the mask through that field.
 
-Pipeline (SimpleITK under the hood):
-  1. Resample source and target onto a common physical grid.
-  2. Multi-resolution registration with a B-spline transform initialised
-     from the affine alignment.
-  3. Optional Demons refinement that produces a dense displacement field.
-  4. Apply the composite transform to the mask via nearest-neighbour.
+Two backends:
+  - ``"sitk"`` (default fallback) — pure SimpleITK, no extra dep
+  - ``"elastix"`` (recommended when installed) — itk-elastix with
+    validated parameter presets; usually more accurate out of the box
 
-Output is the warped mask plus the displacement field (X, Y, Z, 3) in
-millimetres so downstream code can re-use it (for example to warp a
-second mask without re-running the registration).
+Run ``available_backends()`` to see which are installable. ``"auto"``
+picks the best one (elastix if installed, otherwise sitk).
 """
 
 from __future__ import annotations
@@ -23,13 +20,17 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
 import nibabel as nib
 import numpy as np
 import SimpleITK as sitk
 
 from MaskRegistration.backend import _nifti_to_sitk
+from MaskRegistration.backends import (  # noqa: F401 — re-exported below
+    available_backends,
+    get_backend,
+)
 from MaskRegistration.utils import clean_dcm_list
 
 log = logging.getLogger("MaskRegistration")
@@ -37,13 +38,14 @@ log = logging.getLogger("MaskRegistration")
 
 @dataclass
 class DeformableResult:
-    """What deformable_register returns."""
+    """Backend-agnostic result of a deformable registration."""
 
-    warped_mask: sitk.Image
+    warped_mask: Optional[sitk.Image]
     displacement_field: sitk.Image
     final_metric: float
     iterations: int
-    used_demons: bool
+    backend: str = "unknown"
+    used_demons: bool = False
     warnings: list[str] = field(default_factory=list)
 
 
@@ -59,7 +61,6 @@ def _read_dicom_series(folder: Path) -> sitk.Image:
 
 
 def _resample_to_match(moving: sitk.Image, fixed: sitk.Image) -> sitk.Image:
-    """Resample a moving image onto the fixed image's grid (linear interp)."""
     f = sitk.ResampleImageFilter()
     f.SetReferenceImage(fixed)
     f.SetInterpolator(sitk.sitkLinear)
@@ -72,110 +73,49 @@ def deformable_register(
     target_image: sitk.Image,
     source_mask: Optional[sitk.Image] = None,
     *,
+    backend: str = "auto",
     n_iterations: int = 200,
-    bspline_grid: Tuple[int, int, int] = (8, 8, 4),
     use_demons: bool = True,
-    learning_rate: float = 1.0,
+    initial_alignment: str = "rigid+affine",
 ) -> DeformableResult:
     """Estimate a deformable transform that maps source onto target.
 
-    Two-stage: a B-spline mutual-information registration, optionally
-    followed by a Demons refinement that yields a dense displacement
-    field. If ``source_mask`` is provided it is warped with the final
-    transform and returned; otherwise the mask field is set to None.
-
     Args:
-        source_image: moving image (will be deformed onto target).
-        target_image: fixed reference image. Must be on the same physical
-            grid as you want the output to live on.
-        source_mask: optional mask in source space. Will be warped using
-            nearest-neighbour interpolation.
-        n_iterations: max LBFGS-B iterations for the B-spline stage.
-        bspline_grid: control-point grid for the B-spline transform.
-        use_demons: run a Demons refinement after the B-spline stage.
-        learning_rate: B-spline optimiser step size.
+        source_image: moving image.
+        target_image: fixed reference image.
+        source_mask: optional mask in source space; warped through the
+            full composite transform with nearest-neighbour interpolation.
+        backend: which engine to use. ``"auto"`` (default) picks elastix
+            if installed, otherwise SimpleITK. Pass ``"sitk"`` or
+            ``"elastix"`` to force one.
+        n_iterations: max iterations per registration stage.
+        use_demons: SimpleITK only — refine the B-spline result with
+            Symmetric Forces Demons. Ignored by elastix.
+        initial_alignment: which pre-stages to run before the deformable
+            step. ``"rigid+affine"`` (default, robust to repositioning),
+            ``"rigid"``, or ``"none"`` (assume already aligned).
 
     Returns:
-        DeformableResult with warped mask, displacement field, final
-        metric value and number of iterations.
+        DeformableResult with the warped mask, the dense displacement
+        field, the final metric value and the iteration count.
     """
-    fixed = sitk.Cast(target_image, sitk.sitkFloat32)
-    moving = sitk.Cast(source_image, sitk.sitkFloat32)
-
-    if moving.GetSize() != fixed.GetSize():
-        moving = _resample_to_match(moving, fixed)
-
-    # Initial transform: identity (caller is expected to have aligned the
-    # two images roughly already, e.g. via the regular MaskRegistration
-    # affine resample).
-    transform_domain_mesh_size = list(bspline_grid)
-    initial_tx = sitk.BSplineTransformInitializer(
-        image1=fixed, transformDomainMeshSize=transform_domain_mesh_size
+    eng = get_backend(backend)
+    log.info("deformable backend: %s", eng.name)
+    raw = eng.register(
+        fixed=target_image,
+        moving=source_image,
+        source_mask=source_mask,
+        n_iterations=n_iterations,
+        use_demons=use_demons,
+        initial_alignment=initial_alignment,
     )
-
-    R = sitk.ImageRegistrationMethod()
-    R.SetMetricAsMattesMutualInformation(numberOfHistogramBins=32)
-    R.SetMetricSamplingStrategy(R.RANDOM)
-    R.SetMetricSamplingPercentage(0.2)
-    R.SetInterpolator(sitk.sitkLinear)
-    R.SetOptimizerAsLBFGSB(
-        gradientConvergenceTolerance=1e-5,
-        numberOfIterations=n_iterations,
-        maximumNumberOfCorrections=5,
-        maximumNumberOfFunctionEvaluations=1000,
-        costFunctionConvergenceFactor=1e7,
-    )
-    R.SetInitialTransformAsBSpline(initial_tx, inPlace=False)
-    R.SetShrinkFactorsPerLevel(shrinkFactors=[4, 2, 1])
-    R.SetSmoothingSigmasPerLevel(smoothingSigmas=[2, 1, 0])
-    R.SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
-
-    bspline_tx = R.Execute(fixed, moving)
-    final_metric = R.GetMetricValue()
-    iters = R.GetOptimizerIteration()
-    log.info("deformable B-spline: metric=%.4f, iters=%d", final_metric, iters)
-
-    # Optional Demons refinement on the pre-aligned moving image
-    composite = sitk.CompositeTransform(bspline_tx)
-    used_demons = False
-    if use_demons:
-        try:
-            pre_aligned = sitk.Resample(moving, fixed, bspline_tx, sitk.sitkLinear, 0.0)
-            demons = sitk.FastSymmetricForcesDemonsRegistrationFilter()
-            demons.SetNumberOfIterations(50)
-            demons.SetStandardDeviations(1.5)
-            demons_field = demons.Execute(fixed, pre_aligned)
-            demons_tx = sitk.DisplacementFieldTransform(demons_field)
-            composite.AddTransform(demons_tx)
-            used_demons = True
-            log.info("Demons refinement: %d iters", demons.GetNumberOfIterations())
-        except Exception as e:
-            log.warning("Demons refinement failed (%s), keeping B-spline only", e)
-
-    # Materialise the dense displacement field for downstream re-use.
-    displacement_filter = sitk.TransformToDisplacementFieldFilter()
-    displacement_filter.SetReferenceImage(fixed)
-    displacement_field = displacement_filter.Execute(composite)
-
-    # Warp the mask with the composite transform (nearest-neighbour)
-    warped_mask = None
-    if source_mask is not None:
-        mask_resampler = sitk.ResampleImageFilter()
-        mask_resampler.SetReferenceImage(fixed)
-        mask_resampler.SetInterpolator(sitk.sitkNearestNeighbor)
-        mask_resampler.SetDefaultPixelValue(0)
-        mask_resampler.SetTransform(composite)
-        warped_mask = sitk.Cast(
-            mask_resampler.Execute(sitk.Cast(source_mask, sitk.sitkFloat32)),
-            sitk.sitkUInt8,
-        )
-
     return DeformableResult(
-        warped_mask=warped_mask,
-        displacement_field=displacement_field,
-        final_metric=float(final_metric),
-        iterations=int(iters),
-        used_demons=used_demons,
+        warped_mask=raw.warped_mask,
+        displacement_field=raw.displacement_field,
+        final_metric=raw.final_metric,
+        iterations=raw.iterations,
+        backend=raw.backend,
+        used_demons=raw.extra.get("used_demons", False),
     )
 
 
@@ -186,18 +126,22 @@ def transform_deformable(
     out_nii_file: Path,
     out_displacement_file: Optional[Path] = None,
     *,
+    backend: str = "auto",
     n_iterations: int = 200,
     use_demons: bool = True,
+    initial_alignment: str = "rigid+affine",
 ) -> dict:
     """Full deformable registration of a mask from one DICOM series onto
     another, including patient motion / non-rigid deformation.
 
-    This is the heavy-weight counterpart to ``transform()``. Use it when
-    the two acquisitions actually moved against each other (different
-    days, between-scan motion, organ shift) and a pure affine resample
-    would put the mask in the wrong place.
+    See ``deformable_register`` for backend choices.
     """
-    log.info("deformable register: %s -> %s", input_dicom_folder_1, input_dicom_folder_2)
+    log.info(
+        "deformable register (%s): %s -> %s",
+        backend,
+        input_dicom_folder_1,
+        input_dicom_folder_2,
+    )
     source_img = _read_dicom_series(Path(input_dicom_folder_1))
     target_img = _read_dicom_series(Path(input_dicom_folder_2))
     mask_img = sitk.Cast(_nifti_to_sitk(Path(input_mask_file)), sitk.sitkFloat32)
@@ -213,11 +157,13 @@ def transform_deformable(
         source_img,
         target_img,
         source_mask=mask_img,
+        backend=backend,
         n_iterations=n_iterations,
         use_demons=use_demons,
+        initial_alignment=initial_alignment,
     )
 
-    # Save warped mask as clean uint8 NIfTI
+    # Save warped mask as clean uint8 NIfTI (scl_slope=1, scl_inter=0)
     sitk.WriteImage(result.warped_mask, str(out_nii_file))
     raw = nib.load(str(out_nii_file))
     arr = np.asanyarray(raw.dataobj).astype(np.uint8)
@@ -230,6 +176,7 @@ def transform_deformable(
         sitk.WriteImage(result.displacement_field, str(out_displacement_file))
 
     return {
+        "backend": result.backend,
         "final_metric": result.final_metric,
         "iterations": result.iterations,
         "used_demons": result.used_demons,

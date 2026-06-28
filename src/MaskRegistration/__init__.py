@@ -1,6 +1,7 @@
 """MaskRegistration — transfer segmentation masks between DICOM series."""
 
 from MaskRegistration.backend import transform
+from MaskRegistration.backends import available_backends
 from MaskRegistration.deformable import (
     DeformableResult,
     deformable_register,
@@ -14,6 +15,7 @@ from MaskRegistration.utils import (
 )
 
 __all__ = [
+    "available_backends",
     "DeformableResult",
     "check_alignment",
     "clean_dcm_list",

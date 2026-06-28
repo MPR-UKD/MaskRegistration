@@ -77,7 +77,8 @@ def test_displacement_field_shape():
 
 @pytest.mark.skipif(not FIXTURE.exists(), reason="Lena fixture missing")
 def test_deformable_lena_end_to_end(tmp_path):
-    """Real-world: DESS -> T2 deformable, mask should land on cartilage."""
+    """Real-world: DESS -> T2 deformable, mask should land on cartilage.
+    Pin the backend to SITK because it always populates final_metric."""
     out_mask = tmp_path / "warped.nii.gz"
     out_disp = tmp_path / "disp.nii.gz"
     result = transform_deformable(
@@ -86,10 +87,11 @@ def test_deformable_lena_end_to_end(tmp_path):
         input_dicom_folder_2=FIXTURE / "t2",
         out_nii_file=out_mask,
         out_displacement_file=out_disp,
+        backend="sitk",
         n_iterations=50,
         use_demons=False,
     )
     assert out_mask.exists()
     assert out_disp.exists()
-    # Final metric should be a real number
     assert np.isfinite(result["final_metric"])
+    assert result["backend"] == "sitk"

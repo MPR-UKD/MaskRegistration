@@ -139,3 +139,7 @@ test_data/
 # Local test data — DO NOT COMMIT (patient DICOM)
 test/fixtures_local/
 
+
+# transformix scratch output
+deformationField.nii
+

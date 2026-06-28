@@ -1,6 +1,6 @@
 [project]
 name = "maskregistration"
-version = "0.5.0"
+version = "0.6.0"
 description = "Medical image registration tool for aligning segmentation masks"
 authors = [
     {name = "Ludger Radke", email = "113907719+ludgerradke@users.noreply.github.com"}
@@ -20,6 +20,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+elastix = ["itk-elastix>=0.21"]
+all = ["itk-elastix>=0.21"]
 dev = [
     "black>=23.3.0",
     "pytest>=7.4.0",
