@@ -15,7 +15,7 @@ def downsample_with_or(arr: np.ndarray, factor: int) -> np.ndarray:
     result = np.zeros((new_z, arr.shape[1], arr.shape[2]), dtype=np.uint8)
 
     for label in labels:
-        binary = (arr == label)
+        binary = arr == label
         for z in range(new_z):
             z_start = z * factor
             z_end = z_start + factor
@@ -87,7 +87,17 @@ def transform(
     reverse (bool, optional): Read target in reverse order. None = auto-detect (default).
     subpixel_factor (int, optional): Upsample target Z-axis by this factor before registration,
         then downsample with OR logic. Preserves small structures. Default is 1 (disabled).
+
+    Before registration we run a quick affine alignment check between the
+    mask and the source DICOM and warn loudly when they differ by more
+    than 5 mm. This is the most common silent failure mode and almost
+    always means the mask was drawn on a different scan than the one
+    being registered.
     """
+    # Pre-flight: check that the mask's NIfTI affine matches the source
+    # DICOM's first-slice ImagePositionPatient.
+    check_alignment(input_mask_file, input_dicom_folder_1)
+
     reader = sitk.ImageSeriesReader()
 
     # Prepare mask as DICOM
