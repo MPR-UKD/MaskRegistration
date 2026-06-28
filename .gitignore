@@ -135,3 +135,7 @@ dmypy.json
 # Claude
 .claude/
 test_data/
+
+# Local test data — DO NOT COMMIT (patient DICOM)
+test/fixtures_local/
+

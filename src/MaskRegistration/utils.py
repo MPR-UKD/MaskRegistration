@@ -70,8 +70,21 @@ def check_locations(locations):
 
 
 def mask_to_dicom(dcm_folder: Path, nii_file: Path, out_folder: Path):
+    """Write the mask slice-by-slice into copies of the source DICOMs.
+
+    Warns when the slice counts disagree — that case is otherwise silent
+    and produces a partially-filled output series.
+    """
     mask = np.transpose(np.array(nib.load(nii_file).dataobj), (1, 0, 2))
     dicom_files = natsort.natsorted(clean_dcm_list([_ for _ in dcm_folder.glob("*.dcm")]))
+    if mask.shape[2] != len(dicom_files):
+        log.warning(
+            "slice count mismatch: mask has %d slices, source DICOM has %d. "
+            "Using min(%d) — extra slices on either side will be dropped.",
+            mask.shape[2],
+            len(dicom_files),
+            min(mask.shape[2], len(dicom_files)),
+        )
     mask = mask.astype("uint16")
     for i, dcm_file in enumerate(dicom_files):
         if i == mask.shape[2]:
