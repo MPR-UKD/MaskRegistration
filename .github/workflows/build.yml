@@ -21,7 +21,9 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: uv sync
+        run: |
+          uv sync
+          uv pip install pyinstaller
 
       - name: Build CLI
         run: |
@@ -52,7 +54,9 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: uv sync
+        run: |
+          uv sync
+          uv pip install pyinstaller
 
       - name: Build Web App
         run: |
