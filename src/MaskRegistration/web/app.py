@@ -100,6 +100,9 @@ class PathRequest(BaseModel):
 class RegisterRequest(BaseModel):
     reverse: Literal["auto", "normal", "reverse"]
     subpixel: int = 1
+    mode: Literal["affine", "deformable"] = "affine"
+    backend: Literal["auto", "sitk", "elastix"] = "auto"
+    n_iterations: int = 500
 
 
 @app.get("/")
@@ -633,14 +636,26 @@ def register(req: RegisterRequest):
 
     def run_task():
         try:
-            result = transform(
-                input_dicom_folder_1=Path(store.source_path),
-                input_mask_file=Path(store.source_mask_path),
-                input_dicom_folder_2=Path(store.target_path),
-                out_nii_file=Path(output_file),
-                reverse=reverse,
-                subpixel_factor=req.subpixel,
-            )
+            if req.mode == "deformable":
+                from MaskRegistration import transform_deformable
+
+                result = transform_deformable(
+                    input_dicom_folder_1=Path(store.source_path),
+                    input_mask_file=Path(store.source_mask_path),
+                    input_dicom_folder_2=Path(store.target_path),
+                    out_nii_file=Path(output_file),
+                    backend=req.backend,
+                    n_iterations=req.n_iterations,
+                )
+            else:
+                result = transform(
+                    input_dicom_folder_1=Path(store.source_path),
+                    input_mask_file=Path(store.source_mask_path),
+                    input_dicom_folder_2=Path(store.target_path),
+                    out_nii_file=Path(output_file),
+                    reverse=reverse,
+                    subpixel_factor=req.subpixel,
+                )
             nii_img = sitk.ReadImage(output_file)
             arr = sitk.GetArrayFromImage(nii_img)
             store.target_mask_registered = arr
@@ -650,10 +665,22 @@ def register(req: RegisterRequest):
                 direction=nii_img.GetDirection(),
                 size=nii_img.GetSize(),
             )
-            used_direction = "reverse" if result["used_reverse"] else "normal"
+            # deformable result doesn't carry used_reverse; only affine does
+            used_reverse = result.get("used_reverse") if isinstance(result, dict) else None
+            if used_reverse is not None:
+                used_direction = "reverse" if used_reverse else "normal"
+                msg = f"Registration complete (direction: {used_direction})"
+            else:
+                backend_name = (
+                    result.get("backend", "deformable")
+                    if isinstance(result, dict)
+                    else "deformable"
+                )
+                msg = f"Registration complete ({backend_name})"
+                used_direction = None
             store.tasks[task_id] = {
                 "status": "done",
-                "message": f"Registration complete (direction: {used_direction})",
+                "message": msg,
                 "used_direction": used_direction,
             }
         except Exception as e:

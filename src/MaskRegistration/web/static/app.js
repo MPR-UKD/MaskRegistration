@@ -280,7 +280,11 @@ function updateUI() {
     const hasTarget = state.target.slices > 0;
     const hasMask = state.source.hasMask;
 
-    document.getElementById('run-button').style.display = state.settingsChanged ? 'block' : 'none';
+    // Show Re-Register whenever we have everything needed for a registration —
+    // user may want to switch backend / mode without changing settings first.
+    const canRegister = state.source.slices > 0 && state.target.slices > 0 && state.source.hasMask;
+    document.getElementById('run-button').style.display = canRegister ? 'block' : 'none';
+    document.getElementById('run-button').textContent = state.registrationDone ? 'Re-Register' : 'Register';
     document.getElementById('export-section').style.display = (state.registrationDone && hasMask) ? 'block' : 'none';
 }
 
@@ -403,7 +407,10 @@ async function loadMask(side) {
 }
 
 async function autoRegister() {
-    showStatus('Registering...', 'info');
+    const mode = document.getElementById('mode-select')?.value || 'affine';
+    const backend = document.getElementById('backend-select')?.value || 'auto';
+    const n_iterations = parseInt(document.getElementById('iter-input')?.value || '500');
+    showStatus(mode === 'deformable' ? 'Deformable registering (this can take 10-30 s)...' : 'Registering...', 'info');
 
     const reverse = document.getElementById('reverse-select').value;
     const subpixel = parseInt(document.getElementById('subpixel-input').value);
@@ -412,7 +419,7 @@ async function autoRegister() {
         const res = await fetch('/api/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reverse, subpixel })
+            body: JSON.stringify({ reverse, subpixel, mode, backend, n_iterations })
         });
         if (!res.ok) throw new Error((await res.json()).detail);
 
@@ -453,9 +460,28 @@ async function pollRegistration(taskId) {
 }
 
 async function runRegistration() {
-    document.getElementById('run-button').disabled = true;
-    await autoRegister();
-    document.getElementById('run-button').disabled = false;
+    const btn = document.getElementById('run-button');
+    const overlay = document.getElementById('reg-overlay');
+    const label = document.getElementById('reg-overlay-label');
+    const hint = document.getElementById('reg-overlay-hint');
+    const originalText = btn.textContent;
+    const mode = document.getElementById('mode-select')?.value || 'affine';
+    btn.disabled = true;
+    btn.classList.add('running');
+    btn.innerHTML = '<span class="spinner"></span>' + (mode === 'deformable' ? 'Registering…' : 'Registering…');
+    if (overlay) {
+        if (label) label.textContent = mode === 'deformable' ? 'Deformable registering…' : 'Registering…';
+        if (hint) hint.textContent = mode === 'deformable' ? 'This can take 10–30 s' : '';
+        overlay.style.display = 'flex';
+    }
+    try {
+        await autoRegister();
+    } finally {
+        btn.disabled = false;
+        btn.classList.remove('running');
+        btn.textContent = originalText;
+        if (overlay) overlay.style.display = 'none';
+    }
 }
 
 async function exportMask() {
@@ -1259,3 +1285,17 @@ async function restoreFromServerState() {
 restoreFromServerState();
 // Re-check when the user comes back to the tab (e.g. after MCP push)
 window.addEventListener('focus', restoreFromServerState);
+
+function updateModeUI() {
+    const mode = document.getElementById('mode-select')?.value || 'affine';
+    const isDef = mode === 'deformable';
+    const show = (id, on) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = on ? '' : 'none';
+    };
+    show('backend-row', isDef);
+    show('iter-row', isDef);
+    show('direction-row', !isDef);
+    show('subpixel-row', !isDef);
+}
+updateModeUI();

@@ -800,3 +800,178 @@ body {
     color: #fff;
     box-shadow: 0 2px 8px rgba(124, 106, 239, 0.3);
 }
+
+/* ============================================
+   Responsive layout — keep all controls visible
+   on narrow windows by shrinking + scrolling
+   ============================================ */
+
+/* Allow inputs in options to use the full width */
+.option-row {
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.option-row select,
+.option-row input {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+/* Path-input row: input + browse button must stay side-by-side
+   but be able to shrink */
+.path-input {
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.path-input input {
+    min-width: 0;
+    flex: 1 1 100%;
+}
+
+/* Down to ~1100 px, shrink the right sidebar */
+@media (max-width: 1100px) {
+    .sidebar-right {
+        width: 220px;
+        min-width: 220px;
+        padding: 16px 10px;
+    }
+}
+
+/* Down to 900 px, collapse the right sidebar entirely and let users
+   toggle it by clicking the chevron. Sidebar stays scrollable. */
+@media (max-width: 900px) {
+    .sidebar {
+        width: 260px;
+        min-width: 260px;
+        padding: 16px 10px;
+    }
+    .sidebar-right {
+        display: none;
+    }
+}
+
+/* Make absolutely sure no button gets clipped: every button row
+   wraps if needed */
+.btn-run, .btn-export, .btn-reset {
+    width: 100%;
+    margin-top: 8px;
+}
+
+/* The sidebar already has overflow-y: auto, expose a thin scrollbar so
+   users know there's more to scroll */
+.sidebar::-webkit-scrollbar,
+.sidebar-right::-webkit-scrollbar {
+    width: 6px;
+}
+.sidebar::-webkit-scrollbar-thumb,
+.sidebar-right::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+
+/* Make sure the sidebar actually scrolls vertically no matter how
+   small the viewport, and that no section breaks out of the column. */
+.app {
+    height: 100vh;
+    min-height: 0;          /* let flex children shrink */
+}
+
+.sidebar {
+    height: 100vh;
+    max-height: 100vh;
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    flex-shrink: 0;
+    /* keep enough breathing room at the bottom so the last button
+       isn't hidden under the macOS scrollbar */
+    padding-bottom: 32px;
+}
+
+/* On a short window, collapse vertical padding to keep more controls
+   visible at once */
+@media (max-height: 800px) {
+    .sidebar { padding-top: 12px; padding-bottom: 24px; gap: 10px; }
+    .section { padding: 10px 12px; }
+}
+@media (max-height: 640px) {
+    .sidebar { padding-top: 8px; padding-bottom: 18px; gap: 6px; }
+    .section { padding: 8px 10px; }
+    .section-title { font-size: 11px; margin-bottom: 4px; }
+    .option-row { padding: 4px 0; }
+}
+
+/* Spinner shown while registration runs */
+.spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.btn-run.running {
+    background: rgba(124, 106, 239, 0.4);
+    color: rgba(255, 255, 255, 0.85);
+    cursor: progress;
+}
+
+/* Big centered overlay spinner over the viewer area while reg runs */
+.viewer-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(2px);
+    z-index: 100;
+    color: var(--text);
+    gap: 12px;
+    pointer-events: none;
+}
+.viewer-overlay .spinner {
+    width: 42px;
+    height: 42px;
+    border-width: 4px;
+    color: var(--accent);
+}
+.viewer-overlay .label {
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--text);
+}
+.viewer-overlay .hint {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* CRITICAL: make sure flex children can actually shrink so overflow-y works.
+   Without `min-height: 0` on flex children, they take their content size
+   and the parent overflow:auto never kicks in. */
+body {
+    overflow: hidden;
+}
+.app {
+    display: flex;
+    height: 100vh;
+    min-height: 0;
+}
+.sidebar,
+.sidebar-right {
+    height: 100vh;
+    max-height: 100vh;
+    min-height: 0;
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    flex-shrink: 0;
+}
