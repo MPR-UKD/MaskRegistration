@@ -1,6 +1,6 @@
 [project]
 name = "maskregistration"
-version = "0.7.0"
+version = "0.8.0"
 description = "Medical image registration tool for aligning segmentation masks"
 authors = [
     {name = "Ludger Radke", email = "113907719+ludgerradke@users.noreply.github.com"}
@@ -21,7 +21,8 @@ dependencies = [
 
 [project.optional-dependencies]
 elastix = ["itk-elastix>=0.21"]
-all = ["itk-elastix>=0.21"]
+mcp = ["mcp[cli]>=1.0"]
+all = ["itk-elastix>=0.21", "mcp[cli]>=1.0"]
 dev = [
     "black>=23.3.0",
     "pytest>=7.4.0",
@@ -32,6 +33,7 @@ dev = [
 [project.scripts]
 maskregistration = "MaskRegistration.MaskRegistration:main"
 maskregistration-web = "MaskRegistration.web.app:main"
+maskregistration-mcp = "MaskRegistration.mcp_server:main"
 
 [build-system]
 requires = ["hatchling"]
