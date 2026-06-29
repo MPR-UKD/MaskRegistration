@@ -1226,3 +1226,36 @@ transformValueInputs.forEach(id => {
 
 syncTransformInputs();
 updateTargetMaskControls();
+
+// On page load (and on tab focus), check if the server has volumes
+// loaded that the browser doesn't yet know about, then auto-load them.
+// Lets external callers (MCP server, curl) push files into the UI.
+async function restoreFromServerState() {
+    try {
+        const res = await fetch('/api/state');
+        if (!res.ok) return;
+        const s = await res.json();
+        if (s.source_path && !window._restoredSource) {
+            document.getElementById('source-dicom-path').value = s.source_path;
+            await loadDicom('source');
+            window._restoredSource = s.source_path;
+        }
+        if (s.source_mask_path && !window._restoredSourceMask) {
+            document.getElementById('source-mask-path').value = s.source_mask_path;
+            await loadMask('source');
+            window._restoredSourceMask = s.source_mask_path;
+        }
+        if (s.target_path && !window._restoredTarget) {
+            document.getElementById('target-dicom-path').value = s.target_path;
+            await loadDicom('target');
+            window._restoredTarget = s.target_path;
+        }
+    } catch (e) {
+        console.warn('restoreFromServerState failed', e);
+    }
+}
+
+// Run once on initial load
+restoreFromServerState();
+// Re-check when the user comes back to the tab (e.g. after MCP push)
+window.addEventListener('focus', restoreFromServerState);

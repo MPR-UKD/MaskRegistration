@@ -1,8 +1,22 @@
 """MCP server for MaskRegistration.
 
 Exposes the library as MCP tools so an LLM agent (e.g. Claude Code) can
-register knee MRI masks via plain natural-language commands instead of
-clicking through the web UI.
+register knee MRI masks via plain natural-language commands.
+
+Two sets of tools:
+
+  Headless (no UI):
+    - list_backends
+    - check_mask_alignment
+    - register_affine
+    - register_deformable
+    - field_transfer_lowres_to_highres
+
+  Web-UI control (requires `maskregistration-web` running on a port):
+    - ui_status                       what is currently loaded in the UI
+    - ui_load_volumes                 push DICOM + mask paths into the UI
+    - ui_reset                        wipe the UI
+    - ui_register                     trigger the affine register button
 
 Install + run:
     pip install maskregistration[mcp]
@@ -220,6 +234,95 @@ def field_transfer_lowres_to_highres(
         "iterations": res.iterations,
         "speed_factor_estimate": res.speed_factor,
     }
+
+
+# ---- Web UI control tools -------------------------------------------------
+# These talk to the running `maskregistration-web` instance via HTTP. Default
+# URL can be overridden via MASKREG_UI_URL env var.
+
+import os
+import urllib.request
+import json as _json
+
+UI_URL = os.environ.get("MASKREG_UI_URL", "http://localhost:8000")
+
+
+def _ui_post(path: str, body: dict | None = None) -> dict:
+    data = _json.dumps(body or {}).encode()
+    req = urllib.request.Request(
+        f"{UI_URL}{path}",
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=120) as r:
+        return _json.loads(r.read().decode())
+
+
+def _ui_get(path: str) -> dict:
+    with urllib.request.urlopen(f"{UI_URL}{path}", timeout=10) as r:
+        return _json.loads(r.read().decode())
+
+
+@mcp.tool()
+def ui_status() -> dict:
+    """Show what the running web UI currently has loaded.
+
+    Requires `maskregistration-web` to be running (defaults to
+    http://localhost:8000, override with MASKREG_UI_URL).
+    """
+    try:
+        return _ui_get("/api/state")
+    except Exception as e:
+        return {"error": f"UI not reachable at {UI_URL}: {e}"}
+
+
+@mcp.tool()
+def ui_load_volumes(
+    source_dicom: str,
+    target_dicom: str,
+    source_mask: Optional[str] = None,
+    target_mask: Optional[str] = None,
+) -> dict:
+    """Push DICOM folders and optional masks into the running web UI.
+
+    The browser auto-restores from server state on focus, so the user
+    just needs to switch to the browser tab (no manual refresh needed).
+    """
+    return _ui_post(
+        "/api/load-all",
+        {
+            "source_dicom": source_dicom,
+            "source_mask": source_mask,
+            "target_dicom": target_dicom,
+            "target_mask": target_mask,
+        },
+    )
+
+
+@mcp.tool()
+def ui_reset() -> dict:
+    """Wipe everything currently loaded in the web UI."""
+    return _ui_post("/api/reset")
+
+
+@mcp.tool()
+def ui_register(reverse: str = "auto", subpixel: int = 1) -> dict:
+    """Trigger the registration button in the web UI.
+
+    Starts an affine mask resample using the volumes the UI has
+    currently loaded. Returns a task id; poll with ui_task_status.
+    """
+    return _ui_post(
+        "/api/register",
+        {"reverse": reverse, "subpixel": subpixel},
+    )
+
+
+@mcp.tool()
+def ui_task_status(task_id: str) -> dict:
+    """Poll the status of a running UI registration task."""
+    return _ui_get(f"/api/status/{task_id}")
 
 
 def main():

@@ -6,7 +6,7 @@ import uuid
 import webbrowser
 from pathlib import Path
 from threading import Thread
-from typing import Literal
+from typing import Literal, Optional
 
 import nibabel as nib
 import numpy as np
@@ -104,10 +104,7 @@ class RegisterRequest(BaseModel):
 
 @app.get("/")
 def root():
-    return Response(
-        content=(static_dir / "index.html").read_text(),
-        media_type="text/html"
-    )
+    return Response(content=(static_dir / "index.html").read_text(), media_type="text/html")
 
 
 class BrowseRequest(BaseModel):
@@ -118,29 +115,26 @@ class BrowseRequest(BaseModel):
 def browse_macos(mode: str, initial_dir: str = "") -> str:
     if mode == "dir":
         script = 'tell application "System Events" to activate\n'
-        script += 'return POSIX path of (choose folder'
+        script += "return POSIX path of (choose folder"
         if initial_dir:
             script += f' default location POSIX file "{initial_dir}"'
-        script += ')'
+        script += ")"
     elif mode == "file":
         script = 'tell application "System Events" to activate\n'
-        script += 'return POSIX path of (choose file'
+        script += "return POSIX path of (choose file"
         if initial_dir:
             script += f' default location POSIX file "{initial_dir}"'
         script += ' of type {"nii", "gz", "public.item"})'
     else:
         script = 'tell application "System Events" to activate\n'
-        script += 'return POSIX path of (choose file name'
+        script += "return POSIX path of (choose file name"
         if initial_dir:
             script += f' default location POSIX file "{initial_dir}"'
         script += ' default name "mask.nii.gz")'
 
     try:
         result = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            text=True,
-            timeout=120
+            ["osascript", "-e", script], capture_output=True, text=True, timeout=120
         )
         if result.returncode == 0:
             return result.stdout.strip()
@@ -168,13 +162,13 @@ def browse(req: BrowseRequest):
         elif req.mode == "file":
             path = filedialog.askopenfilename(
                 initialdir=initial,
-                filetypes=[("NIFTI files", "*.nii *.nii.gz"), ("All files", "*.*")]
+                filetypes=[("NIFTI files", "*.nii *.nii.gz"), ("All files", "*.*")],
             )
         else:
             path = filedialog.asksaveasfilename(
                 initialdir=initial,
                 defaultextension=".nii.gz",
-                filetypes=[("NIFTI files", "*.nii *.nii.gz")]
+                filetypes=[("NIFTI files", "*.nii *.nii.gz")],
             )
 
         root.destroy()
@@ -205,7 +199,7 @@ def load_dicom(side: Literal["source", "target"], req: PathRequest):
             origin=image.GetOrigin(),
             spacing=image.GetSpacing(),
             direction=image.GetDirection(),
-            size=image.GetSize()
+            size=image.GetSize(),
         )
 
         echos.volumes.append(arr)
@@ -277,7 +271,7 @@ def get_aligned_slice(
     mask: bool = False,
     mask_mode: Literal["registered", "custom"] = "registered",
     reverse: bool = False,
-    t: str = None
+    t: str = None,
 ):
     source_dicom = store.get_dicom("source")
     target_dicom = store.get_dicom("target")
@@ -347,7 +341,7 @@ def get_slice(
     index: int,
     mask: bool = False,
     mask_mode: Literal["registered", "custom"] = "registered",
-    t: str = None
+    t: str = None,
 ):
     dicom = store.get_dicom(side)
     if dicom is None:
@@ -376,13 +370,21 @@ def get_transformed_slice(
     index: int,
     mask: str = "false",
     mask_mode: Literal["registered", "custom"] = "registered",
-    offset_x: float = 0, offset_y: float = 0, offset_z: float = 0,
-    rotation_x: float = 0, rotation_y: float = 0, rotation_z: float = 0,
-    scale_x: float = 1, scale_y: float = 1, scale_z: float = 1,
-    apply_offset: str = "false", apply_rotation: str = "false", apply_scale: str = "false",
+    offset_x: float = 0,
+    offset_y: float = 0,
+    offset_z: float = 0,
+    rotation_x: float = 0,
+    rotation_y: float = 0,
+    rotation_z: float = 0,
+    scale_x: float = 1,
+    scale_y: float = 1,
+    scale_z: float = 1,
+    apply_offset: str = "false",
+    apply_rotation: str = "false",
+    apply_scale: str = "false",
     reverse: str = "false",
     output: Literal["source", "target"] = "source",
-    t: str = None
+    t: str = None,
 ):
     # Parse string booleans
     mask = mask.lower() == "true"
@@ -417,9 +419,7 @@ def get_transformed_slice(
     # Apply rotation (convert degrees to radians)
     if apply_rotation:
         transform.SetRotation(
-            np.radians(rotation_x),
-            np.radians(rotation_y),
-            np.radians(rotation_z)
+            np.radians(rotation_x), np.radians(rotation_y), np.radians(rotation_z)
         )
 
     # Apply offset
@@ -513,7 +513,7 @@ def direction_to_rotation(direction: tuple) -> dict:
     d = np.array(direction).reshape(3, 3)
     # Extract Euler angles (XYZ convention) from rotation matrix
     # Clamp values to avoid numerical issues with asin
-    sy = np.sqrt(d[0, 0]**2 + d[1, 0]**2)
+    sy = np.sqrt(d[0, 0] ** 2 + d[1, 0] ** 2)
     singular = sy < 1e-6
 
     if not singular:
@@ -528,7 +528,7 @@ def direction_to_rotation(direction: tuple) -> dict:
     return {
         "x": round(np.degrees(x), 2),
         "y": round(np.degrees(y), 2),
-        "z": round(np.degrees(z), 2)
+        "z": round(np.degrees(z), 2),
     }
 
 
@@ -555,7 +555,7 @@ def get_spatial_relation():
             "max": [meta.origin[i] + size_phys[i] for i in range(3)],
             "size": list(meta.size),
             "spacing": list(meta.spacing),
-            "size_mm": size_phys
+            "size_mm": size_phys,
         }
 
     source_bounds = get_bounds(sm)
@@ -567,8 +567,12 @@ def get_spatial_relation():
         overlap_max = min(source_bounds["max"][i], target_bounds["max"][i])
         overlap[i] = max(0, overlap_max - overlap_min)
 
-    source_vol = source_bounds["size_mm"][0] * source_bounds["size_mm"][1] * source_bounds["size_mm"][2]
-    target_vol = target_bounds["size_mm"][0] * target_bounds["size_mm"][1] * target_bounds["size_mm"][2]
+    source_vol = (
+        source_bounds["size_mm"][0] * source_bounds["size_mm"][1] * source_bounds["size_mm"][2]
+    )
+    target_vol = (
+        target_bounds["size_mm"][0] * target_bounds["size_mm"][1] * target_bounds["size_mm"][2]
+    )
     overlap_vol = overlap[0] * overlap[1] * overlap[2]
 
     overlap_pct_source = (overlap_vol / source_vol * 100) if source_vol > 0 else 0
@@ -582,13 +586,12 @@ def get_spatial_relation():
     rotation_diff = {
         "x": round(target_rot["x"] - source_rot["x"], 2),
         "y": round(target_rot["y"] - source_rot["y"], 2),
-        "z": round(target_rot["z"] - source_rot["z"], 2)
+        "z": round(target_rot["z"] - source_rot["z"], 2),
     }
 
     # Spacing ratio (target / source)
     spacing_ratio = [
-        round(tm.spacing[i] / sm.spacing[i], 3) if sm.spacing[i] > 0 else 1
-        for i in range(3)
+        round(tm.spacing[i] / sm.spacing[i], 3) if sm.spacing[i] > 0 else 1 for i in range(3)
     ]
 
     return {
@@ -604,7 +607,7 @@ def get_spatial_relation():
         "source_rotation": source_rot,
         "target_rotation": target_rot,
         "warning": overlap_pct_source < 50 or overlap_pct_target < 50,
-        "error": overlap_vol == 0
+        "error": overlap_vol == 0,
     }
 
 
@@ -645,13 +648,13 @@ def register(req: RegisterRequest):
                 origin=nii_img.GetOrigin(),
                 spacing=nii_img.GetSpacing(),
                 direction=nii_img.GetDirection(),
-                size=nii_img.GetSize()
+                size=nii_img.GetSize(),
             )
             used_direction = "reverse" if result["used_reverse"] else "normal"
             store.tasks[task_id] = {
                 "status": "done",
                 "message": f"Registration complete (direction: {used_direction})",
-                "used_direction": used_direction
+                "used_direction": used_direction,
             }
         except Exception as e:
             store.tasks[task_id] = {"status": "error", "message": str(e)}
@@ -681,6 +684,43 @@ def export_mask(req: PathRequest):
 
     shutil.copy2(source_file, dest_path)
     return {"path": str(dest_path)}
+
+
+class LoadAllRequest(BaseModel):
+    source_dicom: str
+    source_mask: Optional[str] = None
+    target_dicom: str
+    target_mask: Optional[str] = None
+
+
+@app.get("/api/state")
+def get_state():
+    """Current server-side data store, so the browser can pick up
+    volumes pushed in via /api/load-all or the MCP server."""
+    return {
+        "source_path": store.source_path,
+        "source_mask_path": store.source_mask_path,
+        "target_path": store.target_path,
+        "has_source_dicom": bool(store.source_echos.volumes),
+        "has_source_mask": store.source_mask is not None,
+        "has_target_dicom": bool(store.target_echos.volumes),
+        "source_slices": len(store.source_echos.volumes[0]) if store.source_echos.volumes else 0,
+        "target_slices": len(store.target_echos.volumes[0]) if store.target_echos.volumes else 0,
+    }
+
+
+@app.post("/api/load-all")
+def load_all(req: LoadAllRequest):
+    """Load source DICOM + optional source mask + target DICOM + optional
+    target mask in one call. Used by the MCP server to push fixtures into
+    the running UI from outside (e.g. from an LLM agent in the terminal)."""
+    load_dicom("source", PathRequest(path=req.source_dicom))
+    if req.source_mask:
+        load_mask("source", PathRequest(path=req.source_mask))
+    load_dicom("target", PathRequest(path=req.target_dicom))
+    if req.target_mask:
+        load_mask("target", PathRequest(path=req.target_mask))
+    return get_state()
 
 
 def main():
