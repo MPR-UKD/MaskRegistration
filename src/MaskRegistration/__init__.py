@@ -2,6 +2,17 @@
 
 from MaskRegistration.backend import transform
 from MaskRegistration.backends import available_backends
+from MaskRegistration.field_transfer import (
+    FieldTransferResult,
+    estimate_field_lowres_apply_highres,
+)
+from MaskRegistration.preprocess import (
+    crop_to_mask_bbox,
+    histogram_match,
+    n4_bias_correct,
+    prepare_for_registration,
+    smooth,
+)
 from MaskRegistration.deformable import (
     DeformableResult,
     deformable_register,
@@ -15,6 +26,13 @@ from MaskRegistration.utils import (
 )
 
 __all__ = [
+    "crop_to_mask_bbox",
+    "histogram_match",
+    "n4_bias_correct",
+    "prepare_for_registration",
+    "smooth",
+    "estimate_field_lowres_apply_highres",
+    "FieldTransferResult",
     "available_backends",
     "DeformableResult",
     "check_alignment",

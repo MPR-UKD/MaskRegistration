@@ -64,30 +64,81 @@ def _itk_vector_to_sitk(img) -> sitk.Image:
     return sitk_img
 
 
-def _build_param_object(initial_alignment: str, n_iterations: int):
+def _build_param_object(
+    initial_alignment: str,
+    n_iterations: int,
+    preset: str = "default",
+    metric: str = "mi",
+):
+    """Assemble elastix parameter object.
+
+    preset:
+      - "default": elastix default rigid/affine/bspline presets.
+      - "knee":    knee-MRI optimised, multi-stage B-spline 16/8/4 mm grid.
+
+    metric:
+      - "mi"  AdvancedMattesMutualInformation (good for multi-modal, default).
+      - "ncc" AdvancedNormalizedCorrelation (better for same-modality
+              like DESS-DESS where the intensity relationship is linear).
+    """
     po = itk.ParameterObject.New()
     maps_added = 0
+
+    metric_name = (
+        "AdvancedNormalizedCorrelation" if metric == "ncc" else "AdvancedMattesMutualInformation"
+    )
+
+    def _patch_metric(m):
+        m["Metric"] = [metric_name]
+
     if initial_alignment in ("rigid", "rigid+affine"):
         rigid = po.GetDefaultParameterMap("rigid")
         rigid["MaximumNumberOfIterations"] = [str(n_iterations)]
+        if preset == "knee":
+            rigid["NumberOfHistogramBins"] = ["64"]
+        _patch_metric(rigid)
         po.AddParameterMap(rigid)
         maps_added += 1
+
     if initial_alignment == "rigid+affine":
         affine = po.GetDefaultParameterMap("affine")
         affine["MaximumNumberOfIterations"] = [str(n_iterations)]
+        if preset == "knee":
+            affine["NumberOfHistogramBins"] = ["64"]
+        _patch_metric(affine)
         po.AddParameterMap(affine)
         maps_added += 1
-    bspline = po.GetDefaultParameterMap("bspline")
-    bspline["MaximumNumberOfIterations"] = [str(n_iterations)]
-    # Final grid spacing in physical mm — smaller = more deformation
-    # capacity, larger = smoother. Default is good for most cases.
-    po.AddParameterMap(bspline)
-    maps_added += 1
+
+    if preset == "knee":
+        for grid_mm in (16.0, 8.0, 4.0):
+            b = po.GetDefaultParameterMap("bspline")
+            b["MaximumNumberOfIterations"] = [str(n_iterations)]
+            b["NumberOfHistogramBins"] = ["64"]
+            b["FinalGridSpacingInPhysicalUnits"] = [str(grid_mm)]
+            b["NumberOfSpatialSamples"] = ["4096"]
+            b["NewSamplesEveryIteration"] = ["true"]
+            _patch_metric(b)
+            po.AddParameterMap(b)
+            maps_added += 1
+    else:
+        bspline = po.GetDefaultParameterMap("bspline")
+        bspline["MaximumNumberOfIterations"] = [str(n_iterations)]
+        _patch_metric(bspline)
+        po.AddParameterMap(bspline)
+        maps_added += 1
+
     return po, maps_added
 
 
 class ElastixBackend(RegistrationBackend):
     name = "elastix"
+
+    def __init__(self, preset: str = "default", metric: str = "mi"):
+        """preset: 'default' (generic) or 'knee' (knee-MRI tuned).
+        metric: 'mi' (Mattes MI) or 'ncc' (NormalizedCorrelation, recommended
+        for same-modality like DESS-DESS)."""
+        self.preset = preset
+        self.metric = metric
 
     def register(
         self,
@@ -98,7 +149,17 @@ class ElastixBackend(RegistrationBackend):
         n_iterations: int = 200,
         use_demons: bool = True,  # ignored — elastix has its own refinement
         initial_alignment: str = "rigid+affine",
+        fixed_mask: Optional[sitk.Image] = None,
+        moving_mask: Optional[sitk.Image] = None,
     ) -> BackendResult:
+        """elastix-based deformable registration.
+
+        fixed_mask / moving_mask: optional binary masks (sitk.Image) that
+        restrict where the registration metric is evaluated. Very
+        effective when you know roughly where the anatomy of interest
+        sits — the algorithm stops chasing irrelevant background pixels.
+        Both masks (or just one) can be passed.
+        """
         if not ELASTIX_AVAILABLE:
             raise RuntimeError("itk-elastix not installed")
 
@@ -106,10 +167,21 @@ class ElastixBackend(RegistrationBackend):
         fixed_itk = _sitk_to_itk(sitk.Cast(fixed, sitk.sitkFloat32))
         moving_itk = _sitk_to_itk(sitk.Cast(moving, sitk.sitkFloat32))
 
-        param_object, n_maps = _build_param_object(initial_alignment, n_iterations)
+        param_object, n_maps = _build_param_object(
+            initial_alignment, n_iterations, preset=self.preset, metric=self.metric
+        )
 
         elastix = itk.ElastixRegistrationMethod.New(fixed_itk, moving_itk)
         elastix.SetParameterObject(param_object)
+        if fixed_mask is not None:
+            # elastix expects uint8 mask
+            fm = _sitk_to_itk(sitk.Cast(fixed_mask, sitk.sitkFloat32))
+            fm_uint8 = itk.cast_image_filter(fm, ttype=(type(fm), itk.Image[itk.UC, 3]))
+            elastix.SetFixedMask(fm_uint8)
+        if moving_mask is not None:
+            mm = _sitk_to_itk(sitk.Cast(moving_mask, sitk.sitkFloat32))
+            mm_uint8 = itk.cast_image_filter(mm, ttype=(type(mm), itk.Image[itk.UC, 3]))
+            elastix.SetMovingMask(mm_uint8)
         elastix.SetLogToConsole(False)
         elastix.Update()
 

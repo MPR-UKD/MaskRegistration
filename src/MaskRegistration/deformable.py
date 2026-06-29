@@ -77,6 +77,8 @@ def deformable_register(
     n_iterations: int = 200,
     use_demons: bool = True,
     initial_alignment: str = "rigid+affine",
+    fixed_mask: Optional[sitk.Image] = None,
+    moving_mask: Optional[sitk.Image] = None,
 ) -> DeformableResult:
     """Estimate a deformable transform that maps source onto target.
 
@@ -108,6 +110,8 @@ def deformable_register(
         n_iterations=n_iterations,
         use_demons=use_demons,
         initial_alignment=initial_alignment,
+        fixed_mask=fixed_mask,
+        moving_mask=moving_mask,
     )
     return DeformableResult(
         warped_mask=raw.warped_mask,

@@ -37,6 +37,14 @@ class RegistrationBackend(ABC):
         n_iterations: int = 200,
         use_demons: bool = True,
         initial_alignment: str = "rigid+affine",
+        fixed_mask: Optional[sitk.Image] = None,
+        moving_mask: Optional[sitk.Image] = None,
     ) -> BackendResult:
-        """Run the registration and return a BackendResult."""
+        """Run the registration and return a BackendResult.
+
+        fixed_mask / moving_mask are optional binary masks (anywhere
+        non-zero counts as 'inside') that restrict where the registration
+        metric is evaluated. Backends that don't support masks must
+        ignore them silently.
+        """
         raise NotImplementedError

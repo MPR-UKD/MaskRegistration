@@ -117,7 +117,11 @@ class SitkBackend(RegistrationBackend):
         n_iterations: int = 200,
         use_demons: bool = True,
         initial_alignment: str = "rigid+affine",
+        fixed_mask: Optional[sitk.Image] = None,
+        moving_mask: Optional[sitk.Image] = None,
     ) -> BackendResult:
+        # SITK backend does not yet use the metric masks; silently ignored.
+        _ = (fixed_mask, moving_mask)
         fixed = sitk.Cast(fixed, sitk.sitkFloat32)
         moving = sitk.Cast(moving, sitk.sitkFloat32)
 

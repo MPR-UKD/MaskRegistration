@@ -33,7 +33,10 @@ def available_backends() -> list[str]:
 def get_backend(name: str) -> RegistrationBackend:
     """Resolve a backend name to an instance.
 
-    ``"auto"`` picks elastix if installed, otherwise SimpleITK.
+    Names:
+      - ``"auto"``         elastix if installed, otherwise SimpleITK
+      - ``"sitk"``         SimpleITK 3-stage
+      - ``"elastix"``      itk-elastix with generic default presets
     """
     if name == "auto":
         name = "elastix" if ELASTIX_AVAILABLE else "sitk"
@@ -45,7 +48,7 @@ def get_backend(name: str) -> RegistrationBackend:
                 "elastix backend requested but itk-elastix is not installed. "
                 "Run: pip install itk-elastix"
             )
-        return ElastixBackend()
+        return ElastixBackend(preset="default")
     raise ValueError(f"unknown backend '{name}'. Available: {available_backends()}")
 
 
